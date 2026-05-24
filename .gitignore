@@ -2,3 +2,12 @@
 dist/
 .swiftpm/
 .DS_Store
+.codex/environments/
+.codex/hooks.json
+.codex/pet-events.jsonl
+.codex/*.jsonl
+__pycache__/
+*.pyc
+*.dmg
+*.pkg
+*.zip

@@ -12,7 +12,12 @@ let package = Package(
         .executable(name: "CodexPetBar", targets: ["CodexPetBar"])
     ],
     targets: [
-        .target(name: "CodexPetBarCore"),
+        .target(
+            name: "CodexPetBarCore",
+            resources: [
+                .process("Resources")
+            ]
+        ),
         .executableTarget(
             name: "CodexPetBar",
             dependencies: ["CodexPetBarCore"]
