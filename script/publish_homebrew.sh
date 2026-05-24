@@ -105,6 +105,7 @@ ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 SOURCE_CASK="$ROOT_DIR/Casks/codex-pet-bar.rb"
 TAP_CASK="$TAP_DIR/Casks/codex-pet-bar.rb"
 TAP_CASK_REL="Casks/codex-pet-bar.rb"
+CASK_TOKEN="codex-pet-bar"
 TAG="v$VERSION"
 ZIP_NAME="CodexPetBar-$VERSION-macos.zip"
 ZIP_PATH="$OUTPUT_DIR/$ZIP_NAME"
@@ -315,6 +316,7 @@ if [[ "$RUN_TESTS" -eq 1 ]]; then
   log_step "2. Running tests"
   swift test
   python3 -m unittest discover -s Tests/InstallHooksTests -p 'test_*.py'
+  python3 -m unittest discover -s Tests/HomebrewReleaseTests -p 'test_*.py'
 else
   log_step "2. Skipping tests"
 fi
@@ -359,14 +361,9 @@ def replace_once(pattern, replacement, description):
 replace_once(r'version "[^"]+"', f'version "{version}"', "version")
 replace_once(r'sha256 "[^"]+"', f'sha256 "{sha}"', "sha256")
 replace_once(
-    r'url "https://github.com/[^/]+/[^/]+/releases/download/v#\{version\}/CodexPetBar-#\{version\}-macos\.zip",',
-    f'url "https://github.com/{repo}/releases/download/v#{{version}}/CodexPetBar-#{{version}}-macos.zip",',
+    r'url "https://github.com/[^/]+/[^/]+/releases/download/v#\{version\}/CodexPetBar-#\{version\}-macos\.zip"(?:,\n\s+verified: "github.com/[^/]+/[^/]+/")?',
+    f'url "https://github.com/{repo}/releases/download/v#{{version}}/CodexPetBar-#{{version}}-macos.zip"',
     "url",
-)
-replace_once(
-    r'verified: "github.com/[^/]+/[^/]+/"',
-    f'verified: "github.com/{repo}/"',
-    "verified URL",
 )
 replace_once(
     r'homepage "https://github.com/[^/]+/[^"]+"',
@@ -388,7 +385,7 @@ log_step "5. Running Homebrew checks in tap"
 
   if [[ "$RUN_BREW_AUDIT" -eq 1 ]]; then
     HOMEBREW_CACHE="${HOMEBREW_CACHE:-/private/tmp/homebrew-cache}" \
-      brew audit --cask --new "$TAP_CASK_REL"
+      brew audit --cask "$CASK_TOKEN"
   else
     echo "Skipping brew audit because --skip-brew-audit was passed."
   fi

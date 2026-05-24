@@ -56,7 +56,7 @@ By default it is a safe rehearsal. It:
 6. updates [Casks/codex-pet-bar.rb](../Casks/codex-pet-bar.rb)
 7. copies that cask into `/opt/homebrew/Library/Taps/andytyler/homebrew-tap/Casks/codex-pet-bar.rb`
 8. runs `brew style --cask`
-9. runs `brew audit --cask --new`
+9. runs `brew audit --cask codex-pet-bar`
 
 It does **not** create a GitHub release or push the tap unless you ask it to.
 
@@ -94,7 +94,7 @@ For a local rehearsal before the source repo is committed:
 4. **Builds the zip.** Runs `script/package_app.sh` and writes the zip under `/private/tmp/codexpet-release`.
 5. **Computes Homebrew's SHA.** Homebrew verifies downloads by exact SHA, so the cask must match the uploaded zip byte-for-byte.
 6. **Updates the cask.** Writes the new `version`, `sha256`, GitHub release URL, and homepage into `Casks/codex-pet-bar.rb`, then copies it into the tap.
-7. **Runs Homebrew checks.** Runs `brew style --cask` and `brew audit --cask --new`.
+7. **Runs Homebrew checks.** Runs `brew style --cask` and `brew audit --cask codex-pet-bar`.
 8. **Publishes the GitHub release asset.** With `--publish-release`, verifies the current commit exists on GitHub, creates release `v0.1.0` if needed, and attaches the zip. If the asset already exists, the script downloads it and requires the SHA to match instead of replacing it.
 9. **Pushes the tap.** With `--push-tap`, commits and pushes the cask update in `andytyler/homebrew-tap`.
 
@@ -138,7 +138,7 @@ codex-pet-bar --add-codex-hooks
 6. Test from the tap checkout:
 
    ```bash
-   brew audit --cask --new codex-pet-bar
+   brew audit --cask codex-pet-bar
    brew install --cask ./Casks/codex-pet-bar.rb
    codex-pet-bar
    ```

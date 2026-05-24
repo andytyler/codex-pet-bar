@@ -5,6 +5,7 @@ ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 TAP_DIR="/opt/homebrew/Library/Taps/andytyler/homebrew-tap"
 REPO="andytyler/codex-pet-bar"
 OUTPUT_DIR="/private/tmp/codexpet-release"
+CASK_TOKEN="codex-pet-bar"
 BUMP="patch"
 VERSION=""
 
@@ -156,6 +157,7 @@ run_shell 'test "$(git branch --show-current)" = "main"'
 run_shell 'test -z "$(git status --porcelain)"'
 run swift test
 run python3 -m unittest discover -s Tests/InstallHooksTests -p 'test_*.py'
+run python3 -m unittest discover -s Tests/HomebrewReleaseTests -p 'test_*.py'
 run swift build -c release
 run rm -rf "$OUTPUT_DIR"
 run env VERSION="$VERSION" ./script/package_app.sh --configuration release --zip --output "$OUTPUT_DIR"
@@ -177,7 +179,7 @@ run git pull --ff-only
 run mkdir -p Casks
 run cp "$ROOT_DIR/Casks/codex-pet-bar.rb" Casks/codex-pet-bar.rb
 run brew style --cask Casks/codex-pet-bar.rb
-run brew audit --cask --new Casks/codex-pet-bar.rb
+run brew audit --cask "$CASK_TOKEN"
 run git add Casks/codex-pet-bar.rb
 run git commit -m "Update codex-pet-bar $VERSION"
 run git push origin main

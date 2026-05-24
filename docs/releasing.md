@@ -70,7 +70,7 @@ The script prints each command before it runs, prints `OK` after success, and st
 
    ```bash
    brew style --cask Casks/codex-pet-bar.rb
-   brew audit --cask --new Casks/codex-pet-bar.rb
+   brew audit --cask codex-pet-bar
    ```
 
 10. Commit and push the tap.
