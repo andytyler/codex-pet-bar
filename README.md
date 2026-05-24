@@ -118,7 +118,7 @@ Release downloads should live at:
 https://github.com/andytyler/codex-pet-bar/releases
 ```
 
-Developer ID signing and notarization are recommended for public direct downloads so Gatekeeper accepts the app cleanly. See [docs/releasing.md](docs/releasing.md).
+Developer ID signing and notarization are recommended for public direct downloads so Gatekeeper accepts the app cleanly.
 
 ### Source Install
 
@@ -251,6 +251,7 @@ Run tests:
 ```bash
 swift test
 python3 -m unittest discover -s Tests/InstallHooksTests -p 'test_*.py'
+python3 -m unittest discover -s Tests/HomebrewReleaseTests -p 'test_*.py'
 ```
 
 If the active developer directory is Command Line Tools only, verify it before trusting the result:
@@ -297,5 +298,4 @@ spctl --assess --type execute --verbose=4 /private/tmp/codexpet-release/CodexPet
 Release workflow references:
 
 - [Homebrew tap and cask workflow](docs/homebrew-tap.md)
-- [Direct distribution, signing, and notarization](docs/releasing.md)
 - [Custom pet package format](docs/custom-pets.md)

@@ -40,63 +40,49 @@ Hooks are explicit because cask install should not mutate a user's Codex config 
 
 ## Release Script
 
-Use the publish script from this repo:
+Use the publish script from a clean `main` checkout:
 
 ```bash
-./script/publish_homebrew.sh --version 0.1.0
+./script/publish_homebrew.sh
 ```
 
-By default it is a safe rehearsal. It:
-
-1. checks the repo state
-2. runs `swift test`
-3. runs `python3 -m unittest discover -s Tests/InstallHooksTests -p 'test_*.py'`
-4. builds `CodexPetBar-0.1.0-macos.zip`
-5. computes the zip SHA
-6. updates [Casks/codex-pet-bar.rb](../Casks/codex-pet-bar.rb)
-7. copies that cask into `/opt/homebrew/Library/Taps/andytyler/homebrew-tap/Casks/codex-pet-bar.rb`
-8. runs `brew style --cask`
-9. runs `brew audit --cask codex-pet-bar`
-
-It does **not** create a GitHub release or push the tap unless you ask it to.
-
-If `brew audit` is blocked by local Homebrew or Command Line Tools setup while you are only rehearsing, use:
+Minor, major, or explicit version releases:
 
 ```bash
-./script/publish_homebrew.sh --version 0.1.0 --allow-dirty --skip-brew-audit
+./script/publish_homebrew.sh --bump minor
+./script/publish_homebrew.sh --bump major
+./script/publish_homebrew.sh --version 0.1.1
 ```
 
-Do not skip `brew audit` for a real publish; update the local Command Line Tools first.
+It:
 
-Full publish:
+1. picks the next patch version from the latest `vX.Y.Z` git tag unless `--version` is passed
+2. checks the source repo is clean and on `main`
+3. runs `swift test`
+4. runs `python3 -m unittest discover -s Tests/InstallHooksTests -p 'test_*.py'`
+5. runs `python3 -m unittest discover -s Tests/HomebrewReleaseTests -p 'test_*.py'`
+6. runs `swift build -c release`
+7. builds `CodexPetBar-<version>-macos.zip`
+8. computes the zip SHA
+9. updates [Casks/codex-pet-bar.rb](../Casks/codex-pet-bar.rb)
+10. commits and pushes the source cask update
+11. creates the GitHub release and uploads the zip
+12. copies the cask into `/opt/homebrew/Library/Taps/andytyler/homebrew-tap/Casks/codex-pet-bar.rb`
+13. runs `brew style --cask`
+14. runs `brew audit --cask codex-pet-bar`
+15. commits and pushes the tap cask update
 
-```bash
-./script/publish_homebrew.sh \
-  --version 0.1.0 \
-  --repo andytyler/codex-pet-bar \
-  --publish-release \
-  --push-tap
-```
-
-Before full publish, the source repo must be committed and pushed to GitHub. The script checks that the current commit exists in `andytyler/codex-pet-bar`.
-
-For a local rehearsal before the source repo is committed:
-
-```bash
-./script/publish_homebrew.sh --version 0.1.0 --allow-dirty
-```
+The script prints each command before it runs, prints `OK` after success, and stops on the first failure with `FAIL`.
 
 ## What The Full Publish Does
 
-1. **Checks the source repo.** Refuses full publish if there are uncommitted source changes.
-2. **Checks the tap checkout.** Confirms `/opt/homebrew/Library/Taps/andytyler/homebrew-tap` is on `main`, points at `github.com/andytyler/homebrew-tap`, and is up to date.
-3. **Tests the app.** Runs `swift test` and the Python hook unittest suite so the release is not built from a failing checkout.
-4. **Builds the zip.** Runs `script/package_app.sh` and writes the zip under `/private/tmp/codexpet-release`.
-5. **Computes Homebrew's SHA.** Homebrew verifies downloads by exact SHA, so the cask must match the uploaded zip byte-for-byte.
-6. **Updates the cask.** Writes the new `version`, `sha256`, GitHub release URL, and homepage into `Casks/codex-pet-bar.rb`, then copies it into the tap.
-7. **Runs Homebrew checks.** Runs `brew style --cask` and `brew audit --cask codex-pet-bar`.
-8. **Publishes the GitHub release asset.** With `--publish-release`, verifies the current commit exists on GitHub, creates release `v0.1.0` if needed, and attaches the zip. If the asset already exists, the script downloads it and requires the SHA to match instead of replacing it.
-9. **Pushes the tap.** With `--push-tap`, commits and pushes the cask update in `andytyler/homebrew-tap`.
+1. **Checks the source repo.** Refuses to continue unless the checkout is clean and on `main`.
+2. **Tests the app and cask workflow.** Runs `swift test`, the Python hook unittest suite, the Homebrew release unittest suite, and `swift build -c release`.
+3. **Builds the zip.** Runs `script/package_app.sh` and writes the zip under `/private/tmp/codexpet-release`.
+4. **Computes Homebrew's SHA.** Homebrew verifies downloads by exact SHA, so the cask must match the uploaded zip byte-for-byte.
+5. **Updates the source cask.** Writes the new `version` and `sha256` into `Casks/codex-pet-bar.rb`, then commits and pushes that source change.
+6. **Publishes the GitHub release asset.** Creates release `v<version>` and attaches the zip.
+7. **Updates the tap cask.** Pulls the tap checkout, copies the source cask into it, runs `brew style --cask` and `brew audit --cask codex-pet-bar`, then commits and pushes the tap cask update.
 
 After that, users install with:
 
@@ -104,6 +90,26 @@ After that, users install with:
 brew tap andytyler/tap
 brew install --cask codex-pet-bar
 codex-pet-bar --add-codex-hooks
+```
+
+## Privacy Check
+
+Before publishing, this should print only the shipped hook source:
+
+```bash
+git ls-files .codex
+```
+
+Expected:
+
+```text
+.codex/hooks/codex_pet_event.py
+```
+
+This should print nothing:
+
+```bash
+git log --oneline --all -- .codex/pet-events.jsonl .codex/environments/environment.toml
 ```
 
 ## Manual Release Steps
