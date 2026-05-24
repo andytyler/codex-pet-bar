@@ -1,6 +1,6 @@
 cask "codex-pet-bar" do
   version "0.1.0"
-  sha256 "be7d9d41781d7701e392633fe84795b1fa976a49d3b5189ee187ea1318c45d15"
+  sha256 "09f18185cd2720333a017e413357595b75b561b87ec9968b85eaaecf40483a18"
 
   url "https://github.com/andytyler/codex-pet-bar/releases/download/v#{version}/CodexPetBar-#{version}-macos.zip",
       verified: "github.com/andytyler/codex-pet-bar/"
@@ -8,7 +8,7 @@ cask "codex-pet-bar" do
   desc "Menu bar companion for Codex pets"
   homepage "https://github.com/andytyler/codex-pet-bar"
 
-  depends_on macos: ">= :sonoma"
+  depends_on macos: :sonoma
 
   app "CodexPetBar.app"
   binary "#{appdir}/CodexPetBar.app/Contents/SharedSupport/bin/codex-pet-bar"

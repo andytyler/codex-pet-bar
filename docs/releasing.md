@@ -1,91 +1,106 @@
-# Direct Distribution
+# Releasing CodexPetBar
 
-Use this checklist when publishing CodexPetBar outside the Mac App Store, such as a GitHub release or direct download.
+Use a new version for every public app zip. Do not replace an existing release zip.
 
-The App Store is not involved. Developer ID signing and notarization are still useful for third-party distribution because they make Gatekeeper trust the downloaded app without users needing to bypass warnings manually.
+## Clean Repo Required
 
-## Privacy Preflight
+The release script refuses to run from a dirty source repo. This is deliberate: the GitHub release tag, uploaded zip, and Homebrew cask must describe the same committed code.
 
-Confirm generated Codex state is not tracked in the release commit:
+Check before releasing:
+
+```bash
+git status --short
+```
+
+Expected output:
+
+```text
+# no output
+```
+
+If you have scratch files, move them outside the repo or commit them before releasing. If you have real release changes, commit and push them first.
+
+## One Command
+
+Patch release from the latest `vX.Y.Z` git tag:
+
+```bash
+cd /Users/ajt/Repos/projects/codex-pet-bar
+./script/release_homebrew.sh
+```
+
+Minor or major release:
+
+```bash
+./script/release_homebrew.sh --bump minor
+./script/release_homebrew.sh --bump major
+```
+
+Explicit version:
+
+```bash
+./script/release_homebrew.sh --version 0.1.1
+```
+
+The script prints each command before it runs, prints `OK` after success, and stops on the first failure with `FAIL`.
+
+## What It Runs
+
+1. Confirm the source repo is clean and on `main`.
+2. Fetch tags and pick the next version from the latest `vX.Y.Z` tag.
+3. Run validation:
+
+   ```bash
+   swift test
+   python3 -m unittest discover -s Tests/InstallHooksTests -p 'test_*.py'
+   swift build -c release
+   ```
+
+4. Build the zip:
+
+   ```bash
+   VERSION=$VERSION ./script/package_app.sh --configuration release --zip --output /private/tmp/codexpet-release
+   ```
+
+5. Compute the zip SHA and update `Casks/codex-pet-bar.rb`.
+6. Commit and push the source cask update.
+7. Create GitHub release `v$VERSION` with the exact zip.
+8. Copy the cask into `/opt/homebrew/Library/Taps/andytyler/homebrew-tap/Casks/codex-pet-bar.rb`.
+9. Run:
+
+   ```bash
+   brew style --cask Casks/codex-pet-bar.rb
+   brew audit --cask --new Casks/codex-pet-bar.rb
+   ```
+
+10. Commit and push the tap.
+
+## Install Check
+
+After release:
+
+```bash
+brew update
+brew install --cask andytyler/tap/codex-pet-bar
+codex-pet-bar
+```
+
+## Privacy Check
+
+Before publishing, this should print only the shipped hook source:
 
 ```bash
 git ls-files .codex
-git status --ignored --short .codex
 ```
 
-The only `.codex` source file expected in the repo is:
+Expected:
 
 ```text
 .codex/hooks/codex_pet_event.py
 ```
 
-Check whether removed local files still exist in git history:
+This should print nothing:
 
 ```bash
-git log --all -- .codex/pet-events.jsonl .codex/environments/environment.toml
+git log --oneline --all -- .codex/pet-events.jsonl .codex/environments/environment.toml
 ```
-
-If those paths appear in history and the repo has already been pushed publicly, stop and purge them from history before release. A deletion commit only removes them from the current tree; it does not remove the old blobs.
-
-## Local Validation
-
-```bash
-swift test
-python3 -m unittest discover -s Tests/InstallHooksTests -p 'test_*.py'
-./script/package_app.sh --configuration release --zip --output /private/tmp/codexpet-release
-codesign --verify --deep --strict /private/tmp/codexpet-release/CodexPetBar.app
-```
-
-Confirm the packaged app contains the SwiftPM resource bundle:
-
-```bash
-find /private/tmp/codexpet-release/CodexPetBar.app/Contents/Resources -maxdepth 2 -name '*.bundle' -print
-```
-
-## Developer ID Build
-
-For a direct-download build that passes Gatekeeper cleanly, sign with a Developer ID Application certificate:
-
-```bash
-CODESIGN_IDENTITY="Developer ID Application: Your Name (TEAMID)" \
-VERSION=0.1.0 \
-BUILD_NUMBER=1 \
-./script/package_app.sh --configuration release --zip --output /private/tmp/codexpet-release
-```
-
-## Notarization For Direct Downloads
-
-Submit the zip archive:
-
-```bash
-xcrun notarytool submit /private/tmp/codexpet-release/CodexPetBar-0.1.0-macos.zip \
-  --apple-id "you@example.com" \
-  --team-id "TEAMID" \
-  --password "app-specific-password" \
-  --wait
-```
-
-Staple the ticket to the app, then recreate the zip:
-
-```bash
-xcrun stapler staple /private/tmp/codexpet-release/CodexPetBar.app
-rm -f /private/tmp/codexpet-release/CodexPetBar-0.1.0-macos.zip
-ditto -c -k --norsrc --keepParent \
-  /private/tmp/codexpet-release/CodexPetBar.app \
-  /private/tmp/codexpet-release/CodexPetBar-0.1.0-macos.zip
-```
-
-Validate the notarized artifact:
-
-```bash
-spctl --assess --type execute --verbose=4 /private/tmp/codexpet-release/CodexPetBar.app
-```
-
-## GitHub Release Notes
-
-Include:
-
-- macOS version requirement
-- install command from `README.md`
-- custom pet folder contract
-- note that the global Codex activity hook is optional and installed with `codex-pet-bar --add-codex-hooks`
