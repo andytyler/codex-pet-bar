@@ -1,6 +1,6 @@
 cask "codex-pet-bar" do
-  version "0.1.1"
-  sha256 "83f665649598ca74e7513f87eae040db3ca238fa6305ed88e712df75237e6253"
+  version "0.1.2"
+  sha256 "ffdf524ed1fadab89947ec8cd523c4f1dff4f61b9569bb590df70a4b3e8f8302"
 
   url "https://github.com/andytyler/codex-pet-bar/releases/download/v#{version}/CodexPetBar-#{version}-macos.zip"
   name "CodexPetBar"
