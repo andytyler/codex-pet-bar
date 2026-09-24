@@ -33,7 +33,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         if let renderArgument = ProcessInfo.processInfo.arguments.first(where: { $0.hasPrefix("--render-task-panel=") }) {
             let path = String(renderArgument.dropFirst("--render-task-panel=".count))
             do {
-                try PetHoverPanelPreviewRenderer.render(to: URL(fileURLWithPath: path))
+                try PetHoverPanelPreviewRenderer.render(
+                    to: URL(fileURLWithPath: path),
+                    empty: ProcessInfo.processInfo.arguments.contains("--preview-empty"),
+                    connections: ProcessInfo.processInfo.arguments.contains("--preview-connections"),
+                    dark: ProcessInfo.processInfo.arguments.contains("--preview-dark")
+                )
             } catch {
                 FileHandle.standardError.write(Data("Could not render task panel: \(error)\n".utf8))
             }
@@ -70,6 +75,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             }
             NSApp.terminate(nil)
             return
+        }
+        if ProcessInfo.processInfo.arguments.contains("--preview-task-panel") {
+            NSApp.setActivationPolicy(.regular)
+            NSApp.activate(ignoringOtherApps: true)
         }
         let controller = StatusPetController()
         controller.start()

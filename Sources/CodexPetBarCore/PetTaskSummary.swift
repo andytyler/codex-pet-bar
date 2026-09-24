@@ -129,20 +129,34 @@ public struct PetTaskProjectGroup: Equatable, Identifiable, Sendable {
 }
 
 public enum PetTaskSummaryGrouping {
-    /// Produces deterministic groups in newest-project-first order. Tasks with
-    /// equal timestamps retain their input order.
-    public static func groups(tasks: [PetTaskSummary]) -> [PetTaskProjectGroup] {
-        let recencyOrdered = tasks.enumerated().sorted { left, right in
+    /// Puts requests for attention before ongoing work, then history. Recency
+    /// breaks ties within each tier; equal timestamps retain their input order.
+    /// Statuses must already be reconciled against the active task snapshot.
+    public static func attentionOrdered(_ tasks: [PetTaskSummary]) -> [PetTaskSummary] {
+        tasks.enumerated().sorted { left, right in
+            let leftPriority = priority(left.element.status)
+            let rightPriority = priority(right.element.status)
+            if leftPriority != rightPriority {
+                return leftPriority < rightPriority
+            }
             if left.element.updatedAt != right.element.updatedAt {
                 return left.element.updatedAt > right.element.updatedAt
             }
             return left.offset < right.offset
         }.map(\.element)
+    }
+
+    /// A project's highest-priority task determines its place in the list.
+    /// Any display limit is applied after attention ordering, so newer history
+    /// cannot displace an older task that still needs the user's attention.
+    public static func groups(tasks: [PetTaskSummary], taskLimit: Int? = nil) -> [PetTaskProjectGroup] {
+        let ordered = attentionOrdered(tasks)
+        let visibleTasks = taskLimit.map { Array(ordered.prefix(max(0, $0))) } ?? ordered
 
         var groups: [PetTaskProjectGroup] = []
         var indexesByProjectID: [String: Int] = [:]
 
-        for task in recencyOrdered {
+        for task in visibleTasks {
             if let index = indexesByProjectID[task.project.id] {
                 let existing = groups[index]
                 groups[index] = PetTaskProjectGroup(project: existing.project, tasks: existing.tasks + [task])
@@ -153,6 +167,14 @@ public enum PetTaskSummaryGrouping {
         }
 
         return groups
+    }
+
+    private static func priority(_ status: PetTaskStatus) -> Int {
+        switch status {
+        case .waiting, .failed: 0
+        case .running: 1
+        case .completed, .recent: 2
+        }
     }
 }
 

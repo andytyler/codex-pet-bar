@@ -42,6 +42,11 @@ final class StatusPetController: NSObject {
     private var completionTracker = PetTaskCompletionTracker()
     private var completionVisibleUntil: Date?
     private var isInstallingHooks = false
+    private var installingProvider: String?
+    private var connectionResultMessage: String?
+    private var connectionResultFailed = false
+    private var cachedIntegrationHealth: [PetProvider: ProviderIntegrationHealth]?
+    private var lastIntegrationHealthRefresh = Date.distantPast
     private lazy var fallbackPetImage: NSImage = {
         let image = NSImage(systemSymbolName: "pawprint.fill", accessibilityDescription: "Codex Pet")
             ?? NSImage(size: NSSize(width: 18, height: 18))
@@ -147,7 +152,7 @@ final class StatusPetController: NSObject {
         button.imagePosition = .imageOnly
         button.imageScaling = .scaleProportionallyDown
         button.target = self
-        button.action = #selector(showMenu)
+        button.action = #selector(handleStatusClick)
         button.sendAction(on: [.leftMouseUp, .rightMouseUp])
         hoverPanelController.attach(
             to: button,
@@ -160,6 +165,12 @@ final class StatusPetController: NSObject {
             },
             onOpenTask: { [weak self] task in
                 self?.openPresentedTask(task)
+            },
+            onOpenSettings: { [weak self] in
+                self?.showMenu()
+            },
+            onConnect: { [weak self] provider in
+                self?.installHooks(provider: provider.rawValue, inlineResult: true)
             }
         )
         updateStatusDescription()
@@ -168,6 +179,15 @@ final class StatusPetController: NSObject {
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.6) { [weak self] in
                 self?.hoverPanelController.presentPreview()
             }
+        }
+    }
+
+    @objc private func handleStatusClick() {
+        if NSApp.currentEvent?.type == .rightMouseUp
+            || NSApp.currentEvent?.modifierFlags.contains(.control) == true {
+            showMenu()
+        } else {
+            hoverPanelController.togglePinned()
         }
     }
 
@@ -211,6 +231,9 @@ final class StatusPetController: NSObject {
         refreshRolloutActivityIfNeeded(now: now)
         renderCurrentFrame(deltaTime: deltaTime)
         updateTimerCadenceIfNeeded()
+        if hoverPanelController.isVisible, now.timeIntervalSince(lastIntegrationHealthRefresh) >= 5 {
+            hoverPanelController.contentDidChange()
+        }
     }
 
     private func startPetEventFileWatcherIfAvailable() {
@@ -426,6 +449,7 @@ final class StatusPetController: NSObject {
 
         let now = Date()
         let completed = completionTracker.consumeHookEvents(newEvents, now: now)
+        cachedIntegrationHealth = nil
         let priorEvents = cachedPetEvents ?? []
         clearCompletionForFreshWork(newEvents, priorEvents: priorEvents, now: now)
         cachedPetEvents = compactPetEvents(priorEvents + newEvents, now: now)
@@ -588,6 +612,7 @@ final class StatusPetController: NSObject {
             let completed = self.completionTracker.consumeHookEvents(retainedLog.events, now: refreshDate)
             self.clearCompletionForFreshWork(retainedLog.events, priorEvents: self.cachedPetEvents ?? [], now: refreshDate)
             self.cachedPetEvents = self.compactPetEvents(retainedLog.events, now: refreshDate)
+            self.cachedIntegrationHealth = nil
             self.taskSummariesDirty = true
             _ = self.applyActivitySnapshot(
                 self.currentActivitySnapshot(now: refreshDate)
@@ -730,31 +755,22 @@ final class StatusPetController: NSObject {
         return PetHoverPanelContent(
             petName: selectedPet?.displayName ?? "Codex Pet",
             statusText: taskStatusText,
-            projects: PetTaskPresentationAdapter.taskGroups(groups)
+            projects: PetTaskPresentationAdapter.taskGroups(groups),
+            connections: PetProvider.allCases.compactMap { providerIntegrationHealth()[$0] },
+            installingProvider: installingProvider,
+            connectionMessage: connectionResultMessage,
+            connectionFailed: connectionResultFailed,
+            petSourceText: preferences.followCodexPet ? "Following your Codex pet" : "Using your chosen menu-bar pet",
+            hasPet: selectedPet != nil
         )
     }
 
     private var taskStatusText: String {
-        if isShowingCompletion { return runningThreadCount == 0 ? "All done" : "Task finished" }
-        if runningThreadCount == 1 {
-            return "1 active task"
-        }
-        if runningThreadCount > 1 {
-            return "\(runningThreadCount) active tasks"
-        }
-
-        switch currentActivity {
-        case .idle:
-            return "Up to date"
-        case .running:
-            return "Working"
-        case .reviewing:
-            return "Waiting for review"
-        case .listening:
-            return "Listening"
-        case .failed:
-            return "Needs attention"
-        }
+        PetTaskOverview.title(
+            scopes: activeScopes,
+            showsCompletion: isShowingCompletion,
+            currentActivity: currentActivity
+        )
     }
 
     private func openPresentedTask(_ task: PetTaskPresentation) {
@@ -1557,6 +1573,16 @@ final class StatusPetController: NSObject {
     }
 
     private func providerIntegrationHealth() -> [PetProvider: ProviderIntegrationHealth] {
+        if let cachedIntegrationHealth, Date().timeIntervalSince(lastIntegrationHealthRefresh) < 5 {
+            return cachedIntegrationHealth
+        }
+        let health = readProviderIntegrationHealth()
+        cachedIntegrationHealth = health
+        lastIntegrationHealthRefresh = Date()
+        return health
+    }
+
+    private func readProviderIntegrationHealth() -> [PetProvider: ProviderIntegrationHealth] {
         let fileManager = FileManager.default
         let codexHome = petEventsURL.deletingLastPathComponent().resolvingSymlinksInPath()
         let installedHookURL = codexHome
@@ -1673,13 +1699,13 @@ final class StatusPetController: NSObject {
     private func integrationHealthLabel(_ state: ProviderIntegrationHealthState) -> String {
         switch state {
         case .notInstalled:
-            "Not installed"
+            "Not connected"
         case .needsUpdate:
-            "Update"
+            "Needs repair"
         case .deliveryError:
             "Delivery error"
         case .noSignal:
-            "No signal"
+            "Ready"
         case .connected:
             "Connected"
         }
@@ -1689,9 +1715,9 @@ final class StatusPetController: NSObject {
         switch state {
         case .notInstalled:
             .off
-        case .needsUpdate, .deliveryError, .noSignal:
+        case .needsUpdate, .deliveryError:
             .mixed
-        case .connected:
+        case .connected, .noSignal:
             .on
         }
     }
@@ -1718,17 +1744,7 @@ final class StatusPetController: NSObject {
     private func integrationSummaryTitle(
         _ healthByProvider: [PetProvider: ProviderIntegrationHealth]
     ) -> String {
-        let states = healthByProvider.values.map(\.state)
-        if states.contains(.deliveryError) {
-            return "Integrations · Error"
-        }
-        if states.contains(.needsUpdate) || states.contains(.notInstalled) {
-            return "Integrations · Setup"
-        }
-        if states.allSatisfy({ $0 == .connected }) {
-            return "Integrations · Connected"
-        }
-        return "Integrations · Verify"
+        "Agents · \(ProviderConnectionPresentation.summary(for: Array(healthByProvider.values)))"
     }
 
     private func integrationSummaryToolTip(
@@ -1985,12 +2001,18 @@ final class StatusPetController: NSObject {
         installHooks(provider: "codex")
     }
 
-    private func installHooks(provider: String) {
+    private func installHooks(provider: String, inlineResult: Bool = false) {
         guard !isInstallingHooks else {
             return
         }
 
         guard let installerURL = hookInstallerURL() else {
+            if inlineResult {
+                connectionResultMessage = "The connection helper is missing. Reinstall Pet Bar from the app download."
+                connectionResultFailed = true
+                hoverPanelController.contentDidChange()
+                return
+            }
             showHookInstallResult(
                 HookInstallResult(
                     exitCode: 1,
@@ -2003,6 +2025,10 @@ final class StatusPetController: NSObject {
         }
 
         isInstallingHooks = true
+        installingProvider = provider
+        connectionResultMessage = nil
+        connectionResultFailed = false
+        hoverPanelController.contentDidChange()
         Task.detached(priority: .userInitiated) {
             let result = HookInstaller.run(installerURL: installerURL, provider: provider)
             await MainActor.run { [weak self] in
@@ -2011,10 +2037,21 @@ final class StatusPetController: NSObject {
                 }
 
                 self.isInstallingHooks = false
+                self.installingProvider = nil
+                self.cachedIntegrationHealth = nil
                 if result.succeeded {
                     self.triggerReaction(.waving)
                 }
-                self.showHookInstallResult(result)
+                if inlineResult {
+                    let name = PetProvider(rawValue: provider).map(self.providerIntegrationDisplayName) ?? "Your agents"
+                    self.connectionResultMessage = result.succeeded
+                        ? "\(name) is ready. Start a new task to verify the connection."
+                        : "Couldn’t connect \(name). \(result.informativeText)"
+                    self.connectionResultFailed = !result.succeeded
+                    self.hoverPanelController.contentDidChange()
+                } else {
+                    self.showHookInstallResult(result)
+                }
             }
         }
     }
@@ -2104,7 +2141,8 @@ final class StatusPetController: NSObject {
         } ?? ""
         let description = "\(petName), \(stateDescription)\(attentionDescription), \(taskDescription)\(providerDescription)"
 
-        button.toolTip = description
+        button.toolTip = "\(description)\nClick for tasks · Right-click for settings"
+        button.setAccessibilityHelp("Click to keep task summaries open. Right-click for settings.")
         button.setAccessibilityLabel(petName)
         button.setAccessibilityValue("\(stateDescription), \(taskDescription)\(providerDescription)")
     }

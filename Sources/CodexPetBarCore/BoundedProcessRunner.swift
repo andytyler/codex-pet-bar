@@ -31,7 +31,9 @@ public enum BoundedProcessRunner {
             let process = Process()
             process.executableURL = executableURL
             process.arguments = arguments
-            process.environment = environment
+            // Installer children must inherit custom provider config roots unless
+            // the caller supplies an explicit, isolated environment.
+            process.environment = environment ?? ProcessInfo.processInfo.environment
             process.standardOutput = outputHandle
             process.standardError = errorHandle
             let exited = DispatchSemaphore(value: 0)

@@ -3,7 +3,7 @@ import CodexPetBarCore
 import SwiftUI
 
 private enum PetHoverPanelMetrics {
-    static let width: CGFloat = 360
+    static let width: CGFloat = 400
     static let screenMargin: CGFloat = 8
     static let statusGap: CGFloat = 6
     static let showDelay: TimeInterval = 0.18
@@ -29,14 +29,22 @@ final class PetHoverPanelController: NSObject {
     private var isPointerOverStatusItem = false
     private var isPointerOverPanel = false
     private var isMenuOpen = false
+    private var isPinned = false
+    private var showsConnections = false
+    private var settingsHandler: (@MainActor () -> Void)?
+    private var connectionHandler: (@MainActor (PetProvider) -> Void)?
+    private var localDismissMonitor: Any?
+    private var globalDismissMonitor: Any?
 
     private lazy var panel: NSPanel = {
         let panel = PetTaskPanel(
             contentRect: .zero,
-            styleMask: [.borderless, .nonactivatingPanel],
+            styleMask: ProcessInfo.processInfo.arguments.contains("--preview-task-panel")
+                ? [.titled, .closable] : [.borderless, .nonactivatingPanel],
             backing: .buffered,
             defer: true
         )
+        panel.title = "Pet Bar Preview"
         panel.backgroundColor = .clear
         panel.isOpaque = false
         panel.hasShadow = true
@@ -55,16 +63,22 @@ final class PetHoverPanelController: NSObject {
     isolated deinit {
         showWorkItem?.cancel()
         hideWorkItem?.cancel()
+        if let localDismissMonitor { NSEvent.removeMonitor(localDismissMonitor) }
+        if let globalDismissMonitor { NSEvent.removeMonitor(globalDismissMonitor) }
     }
 
     func attach(
         to statusButton: NSStatusBarButton,
         contentProvider: @escaping ContentProvider,
-        onOpenTask: @escaping TaskHandler
+        onOpenTask: @escaping TaskHandler,
+        onOpenSettings: @escaping @MainActor () -> Void,
+        onConnect: @escaping @MainActor (PetProvider) -> Void
     ) {
         self.statusButton = statusButton
         self.contentProvider = contentProvider
         self.taskHandler = onOpenTask
+        self.settingsHandler = onOpenSettings
+        self.connectionHandler = onConnect
 
         statusTrackingView?.removeFromSuperview()
         let trackingView = PetHoverTrackingView(frame: statusButton.bounds)
@@ -78,6 +92,8 @@ final class PetHoverPanelController: NSObject {
         statusButton.addSubview(trackingView, positioned: .above, relativeTo: nil)
         statusTrackingView = trackingView
     }
+
+    var isVisible: Bool { panel.isVisible }
 
     func contentDidChange() {
         guard panel.isVisible else {
@@ -100,6 +116,66 @@ final class PetHoverPanelController: NSObject {
         }
     }
 
+    func togglePinned() {
+        if panel.isVisible && isPinned {
+            dismiss()
+            return
+        }
+        presentPinned()
+    }
+
+    func presentConnections() {
+        showsConnections = true
+        presentPinned()
+    }
+
+    private func presentPinned() {
+        guard !isMenuOpen else { return }
+        cancelScheduledTransitions()
+        cancelFadeOut()
+        isPinned = true
+        updatePanelContentAndPosition()
+        panel.alphaValue = 1
+        panel.makeKeyAndOrderFront(nil)
+        startDismissMonitors()
+    }
+
+    private func startDismissMonitors() {
+        guard localDismissMonitor == nil else { return }
+        localDismissMonitor = NSEvent.addLocalMonitorForEvents(
+            matching: [.leftMouseDown, .rightMouseDown, .keyDown]
+        ) { [weak self] event in
+            guard let self else { return event }
+            if event.type == .keyDown {
+                if event.keyCode == 53 && self.panel.isKeyWindow {
+                    self.dismiss()
+                    return nil
+                }
+            } else {
+                self.dismissIfOutside()
+            }
+            return event
+        }
+        globalDismissMonitor = NSEvent.addGlobalMonitorForEvents(
+            matching: [.leftMouseDown, .rightMouseDown]
+        ) { [weak self] _ in
+            self?.dismissIfOutside()
+        }
+    }
+
+    private func dismissIfOutside() {
+        let point = NSEvent.mouseLocation
+        guard !panel.frame.contains(point), statusButtonScreenRect()?.contains(point) != true else { return }
+        dismiss()
+    }
+
+    private func stopDismissMonitors() {
+        if let localDismissMonitor { NSEvent.removeMonitor(localDismissMonitor) }
+        if let globalDismissMonitor { NSEvent.removeMonitor(globalDismissMonitor) }
+        localDismissMonitor = nil
+        globalDismissMonitor = nil
+    }
+
     func dismiss() {
         isPointerOverPanel = false
         cancelScheduledTransitions()
@@ -115,7 +191,9 @@ final class PetHoverPanelController: NSObject {
         cancelScheduledTransitions()
         updatePanelContentAndPosition()
         panel.alphaValue = 1
-        panel.orderFrontRegardless()
+        panel.makeKeyAndOrderFront(nil)
+        isPinned = true
+        startDismissMonitors()
     }
 
     private func statusPointerDidEnter() {
@@ -167,7 +245,7 @@ final class PetHoverPanelController: NSObject {
     }
 
     private func scheduleHideIfUnowned() {
-        guard !isPointerOverStatusItem, !isPointerOverPanel else {
+        guard !isPinned, !isPointerOverStatusItem, !isPointerOverPanel else {
             return
         }
 
@@ -229,13 +307,29 @@ final class PetHoverPanelController: NSObject {
         }
 
         let availableHeight = max(132, screen.visibleFrame.height - (2 * PetHoverPanelMetrics.screenMargin))
-        let panelHeight = min(content.preferredHeight, availableHeight)
+        let connectionHeight: CGFloat = showsConnections
+            ? ProviderConnectionsView.estimatedHeight(resultMessage: content.connectionMessage) + 38 : 0
+        let panelHeight = min(content.preferredHeight + connectionHeight, availableHeight)
         let rootView = PetHoverPanelView(
             content: content,
             height: panelHeight,
             onOpenTask: { [weak self] task in
                 self?.dismiss()
                 self?.taskHandler?(task)
+            },
+            showsConnections: showsConnections,
+            onToggleConnections: { [weak self] in
+                guard let self else { return }
+                self.showsConnections.toggle()
+                self.presentPinned()
+            },
+            onOpenSettings: { [weak self] in
+                self?.dismiss()
+                self?.settingsHandler?()
+            },
+            onConnect: { [weak self] provider in
+                self?.presentPinned()
+                self?.connectionHandler?(provider)
             }
         )
 
@@ -291,7 +385,7 @@ final class PetHoverPanelController: NSObject {
     }
 
     private func hideAnimated() {
-        guard panel.isVisible else {
+        guard panel.isVisible, !isPinned else {
             return
         }
         guard !NSWorkspace.shared.accessibilityDisplayShouldReduceMotion else {
@@ -314,7 +408,7 @@ final class PetHoverPanelController: NSObject {
                 self.refreshPointerOwnership()
                 guard self.dismissalPolicy.finishFade(
                     fadeToken,
-                    pointerOwnsSurface: self.isPointerOverStatusItem || self.isPointerOverPanel
+                    pointerOwnsSurface: self.isPinned || self.isPointerOverStatusItem || self.isPointerOverPanel
                 ) else {
                     self.panel.alphaValue = 1
                     return
@@ -326,6 +420,8 @@ final class PetHoverPanelController: NSObject {
     }
 
     private func hideImmediately() {
+        isPinned = false
+        stopDismissMonitors()
         dismissalPolicy.cancelFade()
         transitionGeneration &+= 1
         panel.orderOut(nil)
@@ -437,27 +533,51 @@ struct PetHoverPanelView: View {
     let content: PetHoverPanelContent
     let height: CGFloat
     let onOpenTask: (PetTaskPresentation) -> Void
+    var showsConnections = false
+    var onToggleConnections: () -> Void = {}
+    var onOpenSettings: () -> Void = {}
+    var onConnect: (PetProvider) -> Void = { _ in }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 4) {
+        VStack(alignment: .leading, spacing: 10) {
             header
-
+            Divider()
             if content.projects.isEmpty {
                 emptyState
             } else {
                 ScrollView {
-                    VStack(alignment: .leading, spacing: 6) {
-                        ForEach(content.projects) { project in
-                            PetTaskProjectView(project: project, onOpenTask: onOpenTask)
+                    VStack(alignment: .leading, spacing: 10) {
+                        if content.needsAttention {
+                            taskSection("Needs you", projects: content.attentionProjects)
+                            if !content.remainingProjects.isEmpty {
+                                taskSection("Other tasks", projects: content.remainingProjects)
+                            }
+                        } else {
+                            ForEach(content.projects) { project in
+                                PetTaskProjectView(project: project, onOpenTask: onOpenTask)
+                            }
                         }
                     }
                     .padding(.bottom, 1)
                 }
                 .scrollIndicators(.automatic)
             }
+            Divider()
+            connectionsButton
+            if showsConnections {
+                Text("Choose the agents you use. Connections stay on this Mac.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                ProviderConnectionsView(
+                    health: content.connections,
+                    installingProvider: content.installingProvider,
+                    resultMessage: content.connectionMessage,
+                    resultIsError: content.connectionFailed,
+                    onConnect: onConnect
+                )
+            }
         }
-        .padding(.horizontal, 10)
-        .padding(.vertical, 8)
+        .padding(12)
         .frame(width: PetHoverPanelMetrics.width, height: height, alignment: .topLeading)
         .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
         .overlay {
@@ -469,48 +589,95 @@ struct PetHoverPanelView: View {
         .accessibilityLabel("\(content.petName) tasks")
     }
 
-    private var header: some View {
-        HStack(spacing: 5) {
-            Text(content.petName)
-                .font(.subheadline.weight(.semibold))
-                .lineLimit(1)
-            Text("· \(content.statusText)")
-                .font(.caption2)
+    private func taskSection(_ title: String, projects: [PetTaskProjectPresentation]) -> some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text(title)
+                .font(.system(size: 11, weight: .semibold))
                 .foregroundStyle(.secondary)
-                .lineLimit(1)
+                .padding(.horizontal, 2)
+            ForEach(projects) { project in
+                PetTaskProjectView(project: project, onOpenTask: onOpenTask)
+            }
+        }
+    }
 
+    private var header: some View {
+        HStack(spacing: 10) {
+            VStack(alignment: .leading, spacing: 3) {
+                Text(content.petName)
+                    .font(.system(size: 15, weight: .semibold))
+                    .lineLimit(1)
+                Text(content.statusText)
+                    .font(.system(size: 12, weight: content.needsAttention ? .semibold : .regular))
+                    .foregroundStyle(content.needsAttention ? Color.orange : Color.secondary)
+                    .lineLimit(1)
+            }
+            .accessibilityElement(children: .combine)
+            Spacer(minLength: 4)
             if !content.activeProviders.isEmpty {
-                HStack(spacing: 3) {
+                HStack(spacing: 5) {
                     ForEach(content.activeProviders, id: \.self) { provider in
-                        PetProviderIconView(provider: provider, artworkSize: 15)
+                        PetProviderIconView(provider: provider, artworkSize: 16)
                     }
                 }
                 .accessibilityElement(children: .ignore)
-                .accessibilityLabel(
-                    "Active providers: \(content.activeProviders.map(\.displayName).joined(separator: ", "))"
-                )
+                .accessibilityLabel("Active agents: \(content.activeProviders.map(\.displayName).joined(separator: ", "))")
             }
-
-            Spacer(minLength: 2)
+            Button(action: onOpenSettings) {
+                Image(systemName: "gearshape")
+                    .font(.system(size: 14))
+                    .frame(width: 28, height: 28)
+                    .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .foregroundStyle(.secondary)
+            .help("Pet Bar settings")
+            .accessibilityLabel("Pet Bar settings")
         }
-        .frame(height: 20)
+    }
+
+    private var connectionsButton: some View {
+        Button(action: onToggleConnections) {
+            HStack(spacing: 6) {
+                Image(systemName: "point.3.connected.trianglepath.dotted")
+                Text("Agents")
+                Spacer()
+                Text(ProviderConnectionPresentation.summary(for: content.connections))
+                    .foregroundStyle(content.hasConnectionIssue ? Color.orange : Color.secondary)
+                Image(systemName: showsConnections ? "chevron.up" : "chevron.down")
+                    .font(.system(size: 10, weight: .semibold))
+            }
+            .font(.system(size: 12))
+            .frame(minHeight: 24)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .help(content.petSourceText)
+        .accessibilityLabel(showsConnections ? "Hide agent connections" : "Show agent connections")
+        .accessibilityValue(ProviderConnectionPresentation.summary(for: content.connections))
     }
 
     private var emptyState: some View {
-        VStack(spacing: 5) {
-            Image(systemName: "sparkles")
-                .font(.body)
+        VStack(spacing: 8) {
+            Image(systemName: content.hasConnectionIssue ? "exclamationmark.triangle" : "moon.zzz")
+                .font(.system(size: 22, weight: .light))
                 .foregroundStyle(.secondary)
-            Text("No recent tasks")
-                .font(.caption.weight(.semibold))
-            Text("Start a task in Codex, Claude Code, or Cursor and it will appear here.")
-                .font(.caption2)
+            Text(!content.hasPet ? "Choose a pet in Codex" : content.hasConnectionIssue ? "An agent needs reconnecting" : "Ready when you are")
+                .font(.system(size: 14, weight: .semibold))
+            Text(!content.hasPet
+                 ? "Pet Bar follows your selected Codex pet. You can connect agents below."
+                 : content.hasConnectionIssue
+                 ? "Review your connections below to get activity flowing again."
+                 : content.hasReadyConnection
+                 ? "Start a task in a connected agent. Your pet will keep an eye on it."
+                 : "Start a task in Codex, or connect agents below for more activity signals.")
+                .font(.system(size: 12))
                 .foregroundStyle(.secondary)
                 .multilineTextAlignment(.center)
                 .fixedSize(horizontal: false, vertical: true)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .padding(.horizontal, 18)
+        .padding(.horizontal, 12)
         .accessibilityElement(children: .combine)
     }
 }
@@ -585,8 +752,14 @@ private struct PetTaskRowView: View {
                         .font(.system(size: 13, weight: .semibold))
                         .foregroundStyle(.primary)
                         .lineLimit(1)
-                    Text(task.summary)
-                        .font(.caption2)
+                    HStack(spacing: 4) {
+                        Text(task.state.displayName)
+                            .foregroundStyle(stateForegroundColor)
+                            .fixedSize(horizontal: true, vertical: false)
+                        Text("·")
+                        Text(task.summary)
+                    }
+                        .font(.system(size: 11))
                         .foregroundStyle(.secondary)
                         .lineLimit(1)
                         .truncationMode(.tail)
@@ -597,7 +770,7 @@ private struct PetTaskRowView: View {
                 stateIndicator
             }
             .padding(.horizontal, 4)
-            .frame(height: 38)
+            .frame(height: 54)
             .background(
                 Color.primary.opacity(isHovered || isFocused ? 0.065 : 0),
                 in: RoundedRectangle(cornerRadius: 8, style: .continuous)
@@ -616,7 +789,7 @@ private struct PetTaskRowView: View {
             self.isHovered = isHovered
         }
         .animation(reduceMotion ? nil : .easeOut(duration: 0.10), value: isHovered)
-        .help(task.summary)
+        .help("\(task.state.displayName) · \(task.summary)\n\(task.accessibilityOpenHint)")
         .accessibilityLabel("\(task.title), \(task.provider.displayName), \(task.state.displayName)")
         .accessibilityValue(task.summary)
         .accessibilityHint(task.accessibilityOpenHint)
@@ -656,11 +829,11 @@ private struct PetTaskRowView: View {
 /// desktop content. It is inactive during normal launches.
 @MainActor
 enum PetHoverPanelPreviewRenderer {
-    static func render(to url: URL) throws {
+    static func render(to url: URL, empty: Bool = false, connections: Bool = false, dark: Bool = false) throws {
         let content = PetHoverPanelContent(
             petName: "Grumble",
-            statusText: "3 active tasks",
-            projects: [
+            statusText: empty ? "All quiet" : "2 tasks need you",
+            projects: empty ? [] : [
                 PetTaskProjectPresentation(
                     id: "expenses",
                     name: "expenses",
@@ -706,11 +879,14 @@ enum PetHoverPanelPreviewRenderer {
                         ),
                     ]
                 ),
-            ]
+            ],
+            connections: PetProvider.allCases.map {
+                ProviderIntegrationHealth(provider: $0, state: empty ? .notInstalled : $0 == .codex ? .connected : $0 == .claude ? .needsUpdate : .notInstalled)
+            }
         )
-        let height = content.preferredHeight
-        let view = PetHoverPanelView(content: content, height: height, onOpenTask: { _ in })
-            .environment(\.colorScheme, .light)
+        let height = content.preferredHeight + (connections ? ProviderConnectionsView.estimatedHeight(resultMessage: nil) + 38 : 0)
+        let view = PetHoverPanelView(content: content, height: height, onOpenTask: { _ in }, showsConnections: connections)
+            .environment(\.colorScheme, dark ? .dark : .light)
         let hostingView = NSHostingView(rootView: view)
         hostingView.frame = NSRect(origin: .zero, size: NSSize(width: PetHoverPanelMetrics.width, height: height))
         hostingView.layoutSubtreeIfNeeded()

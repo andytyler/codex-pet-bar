@@ -51,7 +51,7 @@ To connect Codex, Claude Code, and Cursor in one step:
 ./script/install.sh --with-all-hooks --open
 ```
 
-You can also connect every supported agent after launch from **Integrations → Install All** in the pet menu. Hooks are optional, but they enable richer reactions for prompts, tool runs, permission requests where supported, failures, and stops. Codex may ask you to approve newly installed hooks before reactions begin.
+Click the pet, expand **Agents**, and connect the agents you use. Each connection shows whether it is ready, verified, or needs repair. Other agents stay optional. The right-click menu also offers **Agents → Install / Repair All**. Hooks are optional, but they enable richer reactions for prompts, tool runs, permission requests where supported, failures, and stops. Codex may ask you to approve newly installed hooks before reactions begin.
 
 For a development-only run without copying the app into `~/Applications`:
 
@@ -61,7 +61,7 @@ For a development-only run without copying the app into `~/Applications`:
 
 ## Use
 
-CodexPetBar has no Dock icon. Up to 32 active local tasks get their own provider flag beside the pet: Codex, orange Claude, or Cursor. Waiting and failure attention stays attached to the task that needs it, including when several providers are active together. To keep the menu bar bounded under pathological loads, more than 32 simultaneous scopes become 30 attention-prioritized flags plus a compact `+N` marker; every retained task remains available in the task list. Hover the pet for dense, project-grouped task summaries, or click it for Tasks, Pets, Appearance, Integrations, Utilities, and Quit.
+CodexPetBar has no Dock icon. Up to 32 active local tasks get their own provider flag beside the pet: Codex, orange Claude, or Cursor. Waiting and failure attention stays attached to the task that needs it, including when several providers are active together. To keep the menu bar bounded under pathological loads, more than 32 simultaneous scopes become 30 attention-prioritized flags plus a compact `+N` marker; every retained task remains available in the task list. Hover for a quick look, or **click the pet to keep its task panel open**. Tasks needing input appear first, with readable status labels and project context. Click a task to return to it. Escape, clicking outside, or clicking the pet again closes the panel. **Right-click** (or use the settings button) for Pets, Appearance, agent integrations, Utilities, Open at Login, and Quit.
 
 On first launch from Applications, Pet Bar asks whether to **Open at Login**. Choose **Not Now** to leave it off. You can change the setting later from the pet menu. macOS may require approval in System Settings → General → Login Items.
 

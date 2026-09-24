@@ -97,7 +97,7 @@ struct PetTaskPresentation: Identifiable, Equatable, Sendable {
         case .codex:
             "Opens this Codex task"
         case .claude:
-            "Opens Claude Code in this project with the task resume command ready"
+            "Opens Claude Code when supported, or this project in Finder"
         case .cursor:
             "Opens this project in Cursor"
         case .other:
@@ -116,6 +116,56 @@ struct PetHoverPanelContent: Equatable, Sendable {
     let petName: String
     let statusText: String
     let projects: [PetTaskProjectPresentation]
+    let connections: [ProviderIntegrationHealth]
+    let installingProvider: String?
+    let connectionMessage: String?
+    let connectionFailed: Bool
+    let petSourceText: String
+    let hasPet: Bool
+
+    init(
+        petName: String, statusText: String, projects: [PetTaskProjectPresentation],
+        connections: [ProviderIntegrationHealth] = [], installingProvider: String? = nil,
+        connectionMessage: String? = nil, connectionFailed: Bool = false,
+        petSourceText: String = "Following your Codex pet", hasPet: Bool = true
+    ) {
+        self.petName = petName
+        self.statusText = statusText
+        self.projects = projects
+        self.connections = connections
+        self.installingProvider = installingProvider
+        self.connectionMessage = connectionMessage
+        self.connectionFailed = connectionFailed
+        self.petSourceText = petSourceText
+        self.hasPet = hasPet
+    }
+
+    var needsAttention: Bool {
+        projects.flatMap(\.tasks).contains { $0.state == .waiting || $0.state == .failed }
+    }
+
+    var hasReadyConnection: Bool {
+        connections.contains { $0.state == .connected || $0.state == .noSignal }
+    }
+
+    var hasConnectionIssue: Bool {
+        connections.contains { $0.state == .needsUpdate || $0.state == .deliveryError }
+    }
+
+    var attentionProjects: [PetTaskProjectPresentation] {
+        filteredProjects { $0.state == .waiting || $0.state == .failed }
+    }
+
+    var remainingProjects: [PetTaskProjectPresentation] {
+        filteredProjects { $0.state != .waiting && $0.state != .failed }
+    }
+
+    private func filteredProjects(_ predicate: (PetTaskPresentation) -> Bool) -> [PetTaskProjectPresentation] {
+        projects.compactMap { project in
+            let tasks = project.tasks.filter(predicate)
+            return tasks.isEmpty ? nil : PetTaskProjectPresentation(id: project.id, name: project.name, tasks: tasks)
+        }
+    }
 
     var taskCount: Int {
         projects.reduce(0) { $0 + $1.tasks.count }
@@ -135,17 +185,17 @@ struct PetHoverPanelContent: Equatable, Sendable {
 
     var preferredHeight: CGFloat {
         guard taskCount > 0 else {
-            return 132
+            return 252
         }
 
         let visibleTaskCount = min(taskCount, 6)
-        let visibleProjectCount = min(projects.filter { !$0.tasks.isEmpty }.count, 3)
-        let panelChrome: CGFloat = 40
-        let projectHeadings = CGFloat(visibleProjectCount) * 16
-        let rows = CGFloat(visibleTaskCount) * 38
+        let visibleProjectCount = min(attentionProjects.count + remainingProjects.count, 4)
+        let panelChrome: CGFloat = 134 + (needsAttention ? 48 : 0)
+        let projectHeadings = CGFloat(visibleProjectCount) * 18
+        let rows = CGFloat(visibleTaskCount) * 54
         let rowSpacing = CGFloat(max(0, visibleTaskCount - visibleProjectCount)) * 2
-        let projectSpacing = CGFloat(max(0, visibleProjectCount - 1)) * 6
-        return min(360, panelChrome + projectHeadings + rows + rowSpacing + projectSpacing)
+        let projectSpacing = CGFloat(max(0, visibleProjectCount - 1)) * 10
+        return min(440, panelChrome + projectHeadings + rows + rowSpacing + projectSpacing)
     }
 }
 
