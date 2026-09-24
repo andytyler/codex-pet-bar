@@ -109,21 +109,41 @@ enum CodexPetLifecycle {
         history.pendingPermissions.removeAll { now - $0.timestamp > max(0, attentionWindow) }
         guard let state = history.visibleState else { return nil }
         if events.count == 1, events[0].lifecycleCheckpoint == nil { return state.event }
-        return state.event.withCheckpoint(CodexPetLifecycleCheckpoint(
+        let completedTurns: [String: TimeInterval] = history.completedTurns.filter {
+            $0.value >= retentionCutoff
+        }
+        let orderedPermissions: [CodexPetEvent] = history.pendingPermissions.sorted {
+            permissionKey($0) < permissionKey($1)
+        }
+        let pendingPermissions: [CodexPetEvent] = orderedPermissions.map { $0.withCheckpoint(nil) }
+        let workPhase: String? = history.state.map { phaseName($0.phase) }
+        let workEvents: [CodexPetEvent] = history.state.map { [$0.event.withCheckpoint(nil)] } ?? []
+        let summaryCandidates: [CodexPetEvent] = events.flatMap { event -> [CodexPetEvent] in
+            [event] + (event.lifecycleCheckpoint?.summaryEvents ?? [])
+        }
+        let nonemptySummaries: [CodexPetEvent] = summaryCandidates.filter {
+            !($0.assistantSummary?.isEmpty ?? true)
+        }
+        let orderedSummaries: [CodexPetEvent] = nonemptySummaries.sorted { $0.timestamp > $1.timestamp }
+        let summaryEvents: [CodexPetEvent] = orderedSummaries.prefix(1).map { $0.withCheckpoint(nil) }
+        let reductionTimestamps: [TimeInterval] = events.map {
+            $0.lifecycleCheckpoint?.reducedThrough ?? $0.timestamp
+        }
+        let reducedThrough: TimeInterval? = reductionTimestamps.max()
+        let orderedEvents: [CodexPetEvent] = events.sorted { $0.timestamp < $1.timestamp }
+        let workspaceOverride: String? = orderedEvents.first { !($0.workspace?.isEmpty ?? true) }?.workspace
+        let checkpoint = CodexPetLifecycleCheckpoint(
             phase: phaseName(state.phase), currentTurnID: history.currentTurnID,
             completedTurnID: history.completedTurnID,
-            completedTurns: history.completedTurns.filter { $0.value >= retentionCutoff },
-            pendingPermissions: history.pendingPermissions.sorted { permissionKey($0) < permissionKey($1) }
-                .map { $0.withCheckpoint(nil) },
-            workPhase: history.state.map { phaseName($0.phase) },
-            workEvents: history.state.map { [$0.event.withCheckpoint(nil)] } ?? [],
-            summaryEvents: events.flatMap { [$0] + ($0.lifecycleCheckpoint?.summaryEvents ?? []) }
-                .filter { !($0.assistantSummary?.isEmpty ?? true) }
-                .sorted { $0.timestamp > $1.timestamp }.prefix(1).map { $0.withCheckpoint(nil) },
-            reducedThrough: events.map { $0.lifecycleCheckpoint?.reducedThrough ?? $0.timestamp }.max(),
+            completedTurns: completedTurns,
+            pendingPermissions: pendingPermissions,
+            workPhase: workPhase,
+            workEvents: workEvents,
+            summaryEvents: summaryEvents,
+            reducedThrough: reducedThrough,
             turnStartedAt: history.turnStartedAt
-        ), workspaceOverride: events.sorted { $0.timestamp < $1.timestamp }
-            .first { !($0.workspace?.isEmpty ?? true) }?.workspace)
+        )
+        return state.event.withCheckpoint(checkpoint, workspaceOverride: workspaceOverride)
     }
 
     private struct History {
