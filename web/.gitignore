@@ -1,0 +1,27 @@
+node_modules
+
+# Earlier local image experiments (the active site uses static/).
+/src/lib/assets/*
+!/src/lib/assets/codex-logo.png
+
+# Output
+.output
+.vercel
+.netlify
+.wrangler
+/.svelte-kit
+/build
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Env
+.env
+.env.*
+!.env.example
+!.env.test
+
+# Vite
+vite.config.js.timestamp-*
+vite.config.ts.timestamp-*

@@ -30,4 +30,17 @@ struct PetAnimationFrameClockTests {
 
         #expect(clock.frameIndex == 0)
     }
+
+    @Test("large timer gaps consume elapsed time without leaving frame backlog")
+    func largeTimerGapsConsumeElapsedTimeWithoutLeavingFrameBacklog() {
+        let metadata = PetAtlasMetadata.rowsByState[.waiting]
+        var clock = PetAnimationFrameClock()
+
+        clock.advanceAfterDisplay(deltaTime: 1.0, metadata: metadata, frameCount: 6)
+        let frameAfterGap = clock.frameIndex
+        clock.advanceAfterDisplay(deltaTime: 0.005, metadata: metadata, frameCount: 6)
+
+        #expect(frameAfterGap == 5)
+        #expect(clock.frameIndex == frameAfterGap)
+    }
 }

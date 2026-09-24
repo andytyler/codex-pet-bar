@@ -10,7 +10,7 @@ from pathlib import Path
 
 
 EXPECTED_WIDTH = 1536
-EXPECTED_HEIGHT = 1872
+EXPECTED_HEIGHT_BY_VERSION = {1: 1872, 2: 2288}
 REQUIRED_FIELDS = ("id", "displayName", "description", "spritesheetPath")
 PET_ID_PATTERN = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]*$")
 
@@ -30,9 +30,11 @@ def main(argv: list[str]) -> int:
     if args.print_id:
         print(manifest["id"])
     else:
+        sprite_version = manifest.get("spriteVersionNumber", 1)
         print(
             f"OK: {manifest['id']} ({manifest['displayName']}) "
-            f"uses {spritesheet.name} at {EXPECTED_WIDTH}x{EXPECTED_HEIGHT}"
+            f"uses v{sprite_version} {spritesheet.name} at "
+            f"{EXPECTED_WIDTH}x{EXPECTED_HEIGHT_BY_VERSION[sprite_version]}"
         )
     return 0
 
@@ -62,6 +64,10 @@ def validate(pet_directory: Path) -> tuple[dict, Path]:
     if not PET_ID_PATTERN.fullmatch(manifest["id"]):
         raise ValidationError("pet id must match [A-Za-z0-9][A-Za-z0-9._-]*")
 
+    sprite_version = manifest.get("spriteVersionNumber", 1)
+    if type(sprite_version) is not int or sprite_version not in EXPECTED_HEIGHT_BY_VERSION:
+        raise ValidationError("spriteVersionNumber must be 1 or 2")
+
     spritesheet_path = Path(manifest["spritesheetPath"])
     if spritesheet_path.is_absolute() or ".." in spritesheet_path.parts:
         raise ValidationError("spritesheetPath must be a relative path inside the pet directory")
@@ -71,9 +77,11 @@ def validate(pet_directory: Path) -> tuple[dict, Path]:
         raise ValidationError(f"missing spritesheet: {spritesheet}")
 
     width, height = image_size(spritesheet)
-    if (width, height) != (EXPECTED_WIDTH, EXPECTED_HEIGHT):
+    expected_height = EXPECTED_HEIGHT_BY_VERSION[sprite_version]
+    if (width, height) != (EXPECTED_WIDTH, expected_height):
         raise ValidationError(
-            f"spritesheet is {width}x{height}, expected {EXPECTED_WIDTH}x{EXPECTED_HEIGHT}"
+            f"spritesheet is {width}x{height}, expected {EXPECTED_WIDTH}x{expected_height} "
+            f"for spriteVersionNumber {sprite_version}"
         )
 
     if pet_directory.name != manifest["id"]:

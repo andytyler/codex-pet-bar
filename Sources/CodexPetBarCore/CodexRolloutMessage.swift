@@ -98,7 +98,7 @@ public struct CodexRolloutMessage: Equatable, Sendable {
         guard let rawValue else {
             return nil
         }
-        return ISO8601DateFormatter.codexRollout.date(from: rawValue)
+        return ISO8601DateFormatter.codexDate(from: rawValue)
     }
 }
 
@@ -173,8 +173,6 @@ public enum CodexRolloutMessageLog {
 
 public extension ISO8601DateFormatter {
     static var codexRollout: ISO8601DateFormatter {
-        let formatter = ISO8601DateFormatter()
-        formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
-        return formatter
+        codexInternetDateTimeWithFractionalSeconds
     }
 }

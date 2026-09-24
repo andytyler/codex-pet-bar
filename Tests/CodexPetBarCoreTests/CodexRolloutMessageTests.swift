@@ -16,6 +16,18 @@ struct CodexRolloutMessageTests {
         #expect(message.timestamp == ISO8601DateFormatter.codexRollout.date(from: "2026-05-18T20:35:49.374Z"))
     }
 
+    @Test("extracts timestamps without fractional seconds")
+    func extractsTimestampsWithoutFractionalSeconds() throws {
+        let line = #"""
+        {"timestamp":"2026-05-18T20:35:49Z","type":"event_msg","payload":{"type":"agent_message","message":"No fractional seconds","phase":"commentary"}}
+        """#
+
+        let message = try #require(CodexRolloutMessage(jsonLine: line))
+        let expectedTimestamp = try iso8601Date("2026-05-18T20:35:49Z")
+
+        #expect(message.timestamp == expectedTimestamp)
+    }
+
     @Test("ignores user messages and tool output")
     func ignoresUserMessagesAndToolOutput() throws {
         let userLine = #"""
@@ -64,4 +76,10 @@ private struct TemporaryRolloutDirectory {
             .appendingPathComponent("CodexRolloutMessageTests-\(UUID().uuidString)", isDirectory: true)
         try FileManager.default.createDirectory(at: url, withIntermediateDirectories: true)
     }
+}
+
+private func iso8601Date(_ rawValue: String) throws -> Date {
+    let formatter = ISO8601DateFormatter()
+    let date = formatter.date(from: rawValue)
+    return try #require(date)
 }

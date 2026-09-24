@@ -1,164 +1,89 @@
 # Homebrew Tap
 
-CodexPetBar can be distributed outside the Mac App Store through the existing `andytyler/tap` Homebrew tap, like `catnav`.
+CodexPetBar is distributed as a Homebrew cask through `andytyler/tap`. It installs a native macOS menu bar app and helper commands packaged inside `CodexPetBar.app`. It requires an Apple-Silicon Mac running macOS 14 or later.
 
-This should be a Homebrew **cask** because it installs a native macOS menu bar app. The cask also exposes helper commands that are packaged inside `CodexPetBar.app`.
+Public downloads and Homebrew currently provide v0.1.2. The v0.2.0 source and provider commands described below are pending Apple notarization; the tap must remain on the existing release until a notarized v0.2.0 artifact is ready.
 
 ## User Install
-
-After the cask is published to `andytyler/homebrew-tap`:
-
-```bash
-brew tap andytyler/tap
-brew install --cask codex-pet-bar
-codex-pet-bar
-codex-pet-bar --add-codex-hooks
-```
-
-For one command:
 
 ```bash
 brew install --cask andytyler/tap/codex-pet-bar
 codex-pet-bar
+```
+
+The existing Codex hook command works with the public release:
+
+```bash
 codex-pet-bar --add-codex-hooks
 ```
 
-## Helper Commands
+Open Codex and approve newly installed hooks there. Hook-driven reactions begin when Codex approves and runs those hooks.
 
-The cask exposes:
+## v0.2.0 Helper Commands
 
 ```bash
 codex-pet-bar
-codex-pet-bar --add-codex-hooks
+codex-pet-bar --add-hooks --provider all
 codex-pet-install-hooks
+codex-pet-install-hooks --provider all
+codex-pet-install-hooks --provider claude
+codex-pet-install-hooks --provider cursor
+codex-pet-install-hooks --remove-global
+codex-pet-install-hooks --provider all --remove-global
 codex-pet-install-hooks --workspace /path/to/workspace
+codex-pet-install-hooks --remove-workspace /path/to/workspace
 codex-pet-install-pet /path/to/pet
 codex-pet-validate-pet /path/to/pet
 ```
 
-Hooks are explicit because cask install should not mutate a user's Codex config automatically. The default hook install writes to `~/.codex/hooks.json`; the `--workspace` form is kept for project-local setups.
+Hooks are explicit: installing the cask does not change agent configuration automatically. The default hook install remains Codex-only and writes to `~/.codex/hooks.json`. `--provider all` additionally merges Claude Code and native Cursor hooks into their configured user directories while preserving foreign hooks. Workspace installation is Codex-only.
 
-## Release Script
+## Signed and Notarized Release
 
-Use the publish script from a clean `main` checkout:
+Building requires Swift 6.2+ (Xcode 26+). Start from clean source and tap checkouts on `main`, each matching its fetched remote branch. Commit and push the reviewed source before preparing a release. Use an unused version; never replace an existing public zip.
 
-```bash
-./script/publish_homebrew.sh
-```
-
-Minor, major, or explicit version releases:
+Check for a Developer ID Application identity, then store notarization credentials if needed:
 
 ```bash
-./script/publish_homebrew.sh --bump minor
-./script/publish_homebrew.sh --bump major
-./script/publish_homebrew.sh --version 0.1.1
+security find-identity -p codesigning -v
+xcrun notarytool store-credentials codex-pet-bar-notary \
+  --apple-id "you@example.com" \
+  --team-id "TEAMID"
 ```
 
-It:
+Enter an app-specific password when prompted. A zipped `.app` requires a **Developer ID Application** certificate. Apple must have an active agreement for the signing team before notarization can succeed.
 
-1. picks the next patch version from the latest `vX.Y.Z` git tag unless `--version` is passed
-2. checks the source repo is clean and on `main`
-3. runs `swift test`
-4. runs `python3 -m unittest discover -s Tests/InstallHooksTests -p 'test_*.py'`
-5. runs `python3 -m unittest discover -s Tests/HomebrewReleaseTests -p 'test_*.py'`
-6. runs `swift build -c release`
-7. builds `CodexPetBar-<version>-macos.zip`
-8. computes the zip SHA
-9. updates [Casks/codex-pet-bar.rb](../Casks/codex-pet-bar.rb)
-10. commits and pushes the source cask update
-11. creates the GitHub release and uploads the zip
-12. copies the cask into `/opt/homebrew/Library/Taps/andytyler/homebrew-tap/Casks/codex-pet-bar.rb`
-13. runs `brew style --cask`
-14. runs `brew audit --cask codex-pet-bar`
-15. commits and pushes the tap cask update
-
-The script prints each command before it runs, prints `OK` after success, and stops on the first failure with `FAIL`.
-
-## What The Full Publish Does
-
-1. **Checks the source repo.** Refuses to continue unless the checkout is clean and on `main`.
-2. **Tests the app and cask workflow.** Runs `swift test`, the Python hook unittest suite, the Homebrew release unittest suite, and `swift build -c release`.
-3. **Builds the zip.** Runs `script/package_app.sh` and writes the zip under `/private/tmp/codexpet-release`.
-4. **Computes Homebrew's SHA.** Homebrew verifies downloads by exact SHA, so the cask must match the uploaded zip byte-for-byte.
-5. **Updates the source cask.** Writes the new `version` and `sha256` into `Casks/codex-pet-bar.rb`, then commits and pushes that source change.
-6. **Publishes the GitHub release asset.** Creates release `v<version>` and attaches the zip.
-7. **Updates the tap cask.** Pulls the tap checkout, copies the source cask into it, runs `brew style --cask` and `brew audit --cask codex-pet-bar`, then commits and pushes the tap cask update.
-
-After that, users install with:
+Prepare and inspect a release without publishing:
 
 ```bash
-brew tap andytyler/tap
-brew install --cask codex-pet-bar
-codex-pet-bar --add-codex-hooks
+./script/publish_homebrew.sh --dry-run --version 0.2.0 \
+  --output-dir /private/tmp/codexpet-release-0.2.0 \
+  --sign "Developer ID Application: YOUR NAME (TEAMID)" \
+  --notarize
 ```
 
-## Privacy Check
+This still signs, submits to Apple and staples the result. It creates the zip, staged cask and source-commit manifest, but makes no commits, pushes or GitHub releases. An unsigned dry run is only a local packaging check.
 
-Before publishing, this should print only the shipped hook source:
+Publish the reviewed version:
 
 ```bash
-git ls-files .codex
+./script/publish_homebrew.sh --version 0.2.0 \
+  --sign "Developer ID Application: YOUR NAME (TEAMID)" \
+  --notarize
 ```
 
-Expected:
+The publication command prepares and validates artifacts again, then asks for confirmation. Use `--yes` only when publication is already authorized. Omit `--version` for the next patch version, or use `--bump minor` or `--bump major`; signing and notarization remain required for every public release.
 
-```text
-.codex/hooks/codex_pet_event.py
-```
+The script performs these steps in order:
 
-This should print nothing:
+1. Fetch source tags, validate repository identity and clean source/tap branches, and reject an existing release version.
+2. Run Swift tests and isolated Python installer/release tests, then build the release app.
+3. Sign with hardened runtime, verify the signature, submit to Apple, staple and validate the notarization ticket, and verify the extracted final zip.
+4. Smoke-test the actual packaged commands through Homebrew-style symlinks in a temporary home.
+5. Compute SHA-256 and prepare a cask and source-commit manifest. Run Homebrew style and content audits against that exact staged cask before publishing.
+6. After authorization, copy the staged cask into the source checkout, commit and push it, then create a GitHub release targeting that exact commit and upload the versioned and stable-name zip assets.
+7. Copy the audited cask to the configured tap checkout, verify identical bytes, then commit and push the tap.
 
-```bash
-git log --oneline --all -- .codex/pet-events.jsonl .codex/environments/environment.toml
-```
+It prints each operation, stops on failure, and refuses public publication without signing and notarization. A notary-service agreement error must be resolved before publishing; an unnotarized build must not replace the public release.
 
-## Manual Release Steps
-
-1. Build the cask artifact:
-
-   ```bash
-   VERSION=0.1.0 ./script/package_app.sh --configuration release --zip --output /private/tmp/codexpet-release
-   ```
-
-2. Compute the SHA:
-
-   ```bash
-   shasum -a 256 /private/tmp/codexpet-release/CodexPetBar-0.1.0-macos.zip
-   ```
-
-3. Upload that exact zip to a GitHub release:
-
-   ```text
-   https://github.com/andytyler/codex-pet-bar/releases/tag/v0.1.0
-   ```
-
-4. Copy [Casks/codex-pet-bar.rb](../Casks/codex-pet-bar.rb) into:
-
-   ```text
-   andytyler/homebrew-tap:
-     Casks/codex-pet-bar.rb
-   ```
-
-5. Replace the cask `sha256` with the SHA from step 2.
-
-6. Test from the tap checkout:
-
-   ```bash
-   brew audit --cask codex-pet-bar
-   brew install --cask ./Casks/codex-pet-bar.rb
-   codex-pet-bar
-   ```
-
-## Updating
-
-For each release:
-
-1. Build a new zip.
-2. Upload it to the matching GitHub release tag.
-3. Update `version` and `sha256` in the tap cask.
-4. Users upgrade with:
-
-   ```bash
-   brew update
-   brew upgrade --cask codex-pet-bar
-   ```
+See [Releasing CodexPetBar](releasing.md) for packaging details, privacy checks and post-release installation checks.

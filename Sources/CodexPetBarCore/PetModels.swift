@@ -6,19 +6,22 @@ public struct PetPackage: Equatable, Identifiable, Sendable {
     public let description: String
     public let directoryURL: URL
     public let spritesheetURL: URL
+    public let spriteVersionNumber: Int
 
     public init(
         id: String,
         displayName: String,
         description: String,
         directoryURL: URL,
-        spritesheetURL: URL
+        spritesheetURL: URL,
+        spriteVersionNumber: Int = 1
     ) {
         self.id = id
         self.displayName = displayName
         self.description = description
         self.directoryURL = directoryURL
         self.spritesheetURL = spritesheetURL
+        self.spriteVersionNumber = spriteVersionNumber
     }
 }
 
@@ -30,11 +33,11 @@ public enum PetSize: String, CaseIterable, Sendable {
     public var menuBarLength: Double {
         switch self {
         case .small:
-            28
-        case .medium:
-            36
-        case .large:
             44
+        case .medium:
+            56
+        case .large:
+            102
         }
     }
 }
@@ -61,13 +64,13 @@ public enum CodexActivity: String, CaseIterable, Sendable {
     public var animationState: PetAnimationState {
         switch self {
         case .idle:
-            .waiting
+            .idle
         case .running:
             .running
         case .reviewing:
-            .review
+            .waiting
         case .listening:
-            .review
+            .idle
         case .failed:
             .failed
         }

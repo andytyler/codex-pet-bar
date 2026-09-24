@@ -25,18 +25,47 @@ public struct PetAnimationFrameClock: Equatable, Sendable {
         frameIndex %= frameCount
         elapsedMilliseconds += max(0, deltaTime) * 1_000
 
-        let duration = frameDurationMilliseconds(
-            at: frameIndex,
-            metadata: metadata,
-            fallback: 140
-        )
+        if deltaTime < 0.3 {
+            let duration = frameDurationMilliseconds(
+                at: frameIndex,
+                metadata: metadata,
+                fallback: 140
+            )
 
-        guard elapsedMilliseconds >= duration else {
+            guard elapsedMilliseconds >= duration else {
+                return
+            }
+
+            elapsedMilliseconds -= duration
+            frameIndex = (frameIndex + 1) % frameCount
+            let nextDuration = frameDurationMilliseconds(
+                at: frameIndex,
+                metadata: metadata,
+                fallback: 140
+            )
+            elapsedMilliseconds = min(elapsedMilliseconds, max(0, nextDuration - 0.001))
             return
         }
 
-        elapsedMilliseconds -= duration
-        frameIndex = (frameIndex + 1) % frameCount
+        let maxAdvances = max(frameCount * 2, 1)
+        var advances = 0
+        while advances < maxAdvances {
+            let duration = frameDurationMilliseconds(
+                at: frameIndex,
+                metadata: metadata,
+                fallback: 140
+            )
+
+            guard elapsedMilliseconds >= duration else {
+                return
+            }
+
+            elapsedMilliseconds -= duration
+            frameIndex = (frameIndex + 1) % frameCount
+            advances += 1
+        }
+
+        elapsedMilliseconds = 0
     }
 
     private func frameDurationMilliseconds(

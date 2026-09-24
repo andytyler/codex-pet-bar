@@ -1,0 +1,260 @@
+import Foundation
+import CodexPetBarCore
+
+enum PetTaskProviderPresentation: String, Hashable, Sendable {
+    case codex
+    case claude
+    case cursor
+    case other
+
+    var displayName: String {
+        switch self {
+        case .codex:
+            "Codex"
+        case .claude:
+            "Claude Code"
+        case .cursor:
+            "Cursor"
+        case .other:
+            "Agent"
+        }
+    }
+
+    var systemImageName: String {
+        switch self {
+        case .codex:
+            "sparkles.square.filled.on.square"
+        case .claude:
+            "command.circle.fill"
+        case .cursor:
+            "cursorarrow.rays"
+        case .other:
+            "terminal.fill"
+        }
+    }
+}
+
+enum PetTaskStatePresentation: String, Sendable {
+    case running
+    case waiting
+    case completed
+    case failed
+    case recent
+
+    var displayName: String {
+        switch self {
+        case .running:
+            "Running"
+        case .waiting:
+            "Waiting for input"
+        case .completed:
+            "Completed"
+        case .failed:
+            "Needs attention"
+        case .recent:
+            "Recent"
+        }
+    }
+
+    var systemImageName: String {
+        switch self {
+        case .running:
+            "arrow.triangle.2.circlepath"
+        case .waiting:
+            "hand.raised.fill"
+        case .completed:
+            "checkmark"
+        case .failed:
+            "exclamationmark"
+        case .recent:
+            "clock.fill"
+        }
+    }
+
+    var isActive: Bool {
+        switch self {
+        case .running, .waiting, .failed:
+            true
+        case .completed, .recent:
+            false
+        }
+    }
+}
+
+struct PetTaskPresentation: Identifiable, Equatable, Sendable {
+    let id: String
+    let sourceID: String
+    let navigationSourceID: String?
+    let title: String
+    let summary: String
+    let provider: PetTaskProviderPresentation
+    let state: PetTaskStatePresentation
+    let deepLinkURL: URL?
+    let projectURL: URL?
+
+    var accessibilityOpenHint: String {
+        switch provider {
+        case .codex:
+            "Opens this Codex task"
+        case .claude:
+            "Opens Claude Code in this project with the task resume command ready"
+        case .cursor:
+            "Opens this project in Cursor"
+        case .other:
+            "Opens this project"
+        }
+    }
+}
+
+struct PetTaskProjectPresentation: Identifiable, Equatable, Sendable {
+    let id: String
+    let name: String
+    let tasks: [PetTaskPresentation]
+}
+
+struct PetHoverPanelContent: Equatable, Sendable {
+    let petName: String
+    let statusText: String
+    let projects: [PetTaskProjectPresentation]
+
+    var taskCount: Int {
+        projects.reduce(0) { $0 + $1.tasks.count }
+    }
+
+    var activeProviders: [PetTaskProviderPresentation] {
+        var seen = Set<PetTaskProviderPresentation>()
+        return projects
+            .flatMap(\.tasks)
+            .compactMap { task in
+                guard task.state.isActive, seen.insert(task.provider).inserted else {
+                    return nil
+                }
+                return task.provider
+            }
+    }
+
+    var preferredHeight: CGFloat {
+        guard taskCount > 0 else {
+            return 132
+        }
+
+        let visibleTaskCount = min(taskCount, 6)
+        let visibleProjectCount = min(projects.filter { !$0.tasks.isEmpty }.count, 3)
+        let panelChrome: CGFloat = 40
+        let projectHeadings = CGFloat(visibleProjectCount) * 16
+        let rows = CGFloat(visibleTaskCount) * 38
+        let rowSpacing = CGFloat(max(0, visibleTaskCount - visibleProjectCount)) * 2
+        let projectSpacing = CGFloat(max(0, visibleProjectCount - 1)) * 6
+        return min(360, panelChrome + projectHeadings + rows + rowSpacing + projectSpacing)
+    }
+}
+
+enum PetTaskPresentationAdapter {
+    static func taskGroups(_ groups: [PetTaskProjectGroup]) -> [PetTaskProjectPresentation] {
+        groups.map { group in
+            let projectFallbackURL = group.project.path.map {
+                URL(fileURLWithPath: $0, isDirectory: true)
+            }
+            return PetTaskProjectPresentation(
+                id: group.id,
+                name: group.project.name,
+                tasks: group.tasks.map { task in
+                    PetTaskPresentation(
+                        id: task.id,
+                        sourceID: task.sourceID,
+                        navigationSourceID: task.navigationSourceID,
+                        title: task.title,
+                        summary: task.detail,
+                        provider: provider(task.provider),
+                        state: state(task.status),
+                        deepLinkURL: task.deepLinkURL,
+                        projectURL: projectFallbackURL
+                    )
+                }
+            )
+        }
+    }
+
+    static func codexThreads(
+        _ threads: [CodexThreadSummary],
+        activeThreadIDs: Set<String>,
+        now: Date = Date()
+    ) -> [PetTaskProjectPresentation] {
+        let rows = CodexThreadMenuRows.build(threads: threads)
+        let datesByID = Dictionary(uniqueKeysWithValues: threads.map { ($0.id, $0.updatedAt) })
+        let sections = CodexThreadMenuSections.build(rows: rows)
+
+        return sections.map { section in
+            PetTaskProjectPresentation(
+                id: section.folderTitle,
+                name: section.folderTitle,
+                tasks: section.rows.map { row in
+                    let isRunning = activeThreadIDs.contains(row.id)
+                    return PetTaskPresentation(
+                        id: row.id,
+                        sourceID: row.id,
+                        navigationSourceID: row.id,
+                        title: row.title,
+                        summary: fallbackSummary(
+                            isRunning: isRunning,
+                            updatedAt: datesByID[row.id] ?? nil,
+                            now: now
+                        ),
+                        provider: .codex,
+                        state: isRunning ? .running : .recent,
+                        deepLinkURL: row.deepLinkURL,
+                        projectURL: nil
+                    )
+                }
+            )
+        }
+    }
+
+    private static func fallbackSummary(isRunning: Bool, updatedAt: Date?, now: Date) -> String {
+        if isRunning {
+            return "Working in Codex"
+        }
+
+        guard let updatedAt else {
+            return "Recent Codex task"
+        }
+
+        let elapsed = max(0, now.timeIntervalSince(updatedAt))
+        switch elapsed {
+        case ..<60:
+            return "Updated just now"
+        case ..<3_600:
+            return "Updated \(max(1, Int(elapsed / 60)))m ago"
+        case ..<86_400:
+            return "Updated \(max(1, Int(elapsed / 3_600)))h ago"
+        default:
+            return "Updated \(max(1, Int(elapsed / 86_400)))d ago"
+        }
+    }
+
+    private static func provider(_ provider: PetProvider) -> PetTaskProviderPresentation {
+        switch provider {
+        case .codex:
+            .codex
+        case .claude:
+            .claude
+        case .cursor:
+            .cursor
+        }
+    }
+
+    private static func state(_ state: PetTaskStatus) -> PetTaskStatePresentation {
+        switch state {
+        case .running:
+            .running
+        case .waiting:
+            .waiting
+        case .failed:
+            .failed
+        case .completed:
+            .completed
+        case .recent:
+            .recent
+        }
+    }
+}

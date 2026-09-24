@@ -17,7 +17,8 @@ Each pet directory must contain a manifest and the spritesheet named by that man
   "id": "my-pet",
   "displayName": "My Pet",
   "description": "A short description.",
-  "spritesheetPath": "spritesheet.webp"
+  "spritesheetPath": "spritesheet.webp",
+  "spriteVersionNumber": 2
 }
 ```
 
@@ -28,18 +29,18 @@ Rules:
 - `displayName` is shown in the menu.
 - `description` is reserved for package metadata.
 - `spritesheetPath` must be a relative path inside the pet directory.
+- `spriteVersionNumber` may be `1` or `2`. If omitted, it defaults to `1` for compatibility with existing pets.
 
 ## Spritesheet
 
-The spritesheet must be exactly:
+Both sprite versions use 8 columns of `192 x 208` pixel cells:
 
 ```text
-1536 x 1872 pixels
-8 columns x 9 rows
-192 x 208 pixels per cell
+v1: 1536 x 1872 pixels (8 columns x 9 rows)
+v2: 1536 x 2288 pixels (8 columns x 11 rows)
 ```
 
-Rows are fixed:
+Rows 0-8 are fixed in both versions:
 
 | Row | State | Used columns |
 | --- | --- | --- |
@@ -52,6 +53,8 @@ Rows are fixed:
 | 6 | `waiting` | 0-5 |
 | 7 | `running` | 0-5 |
 | 8 | `review` | 0-5 |
+
+Version 2 adds 16 static gaze frames in rows 9-10. Heading `000` looks up, and the headings advance clockwise in 22.5-degree steps. Frames `000`-`007` occupy row 9 columns 0-7; frames `008`-`015` occupy row 10 columns 0-7.
 
 Unused cells may be transparent. Visible frames should fit inside their cells without crossing into neighboring cells.
 
@@ -68,7 +71,8 @@ The validator checks:
 - required manifest fields
 - relative spritesheet path
 - referenced spritesheet exists
-- image dimensions are exactly `1536x1872`
+- `spriteVersionNumber` is supported
+- image dimensions match the declared sprite version
 
 ## Install
 
@@ -88,10 +92,6 @@ Use **Refresh Pets** from the CodexPetBar menu after installing or replacing a p
 
 ## Preview Installed Pets
 
-Render state snapshots for an installed pet:
+Choose the installed pet from **Pets** in the menu bar, then use the animation controls to check each state. Run `./script/validate_pet.py /path/to/my-pet` first to check the atlas dimensions and manifest.
 
-```bash
-swift run CodexPetSnapshots --pet my-pet --output visual-testing/my-pet
-```
-
-This is useful when checking whether a spritesheet crops cleanly in the menu bar.
+Pet installation respects `CODEX_HOME`; when unset, it uses `~/.codex`. Reinstall from the original package folder rather than the installed destination.

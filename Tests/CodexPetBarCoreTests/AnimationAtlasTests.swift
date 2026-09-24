@@ -27,4 +27,13 @@ struct AnimationAtlasTests {
         #expect(rows[.running]?.rowIndex == 7)
         #expect(rows[.review]?.rowIndex == 8)
     }
+
+    @Test("idle playback uses the current six-times-slower cadence")
+    func idlePlaybackUsesSlowCadence() throws {
+        let baseIdle = try #require(PetAtlasMetadata.rowsByState[.idle])
+        let playbackIdle = try #require(PetAtlasMetadata.playbackRow(for: .idle))
+
+        #expect(playbackIdle.frameDurationsMS == baseIdle.frameDurationsMS.map { $0 * 6 })
+        #expect(PetAtlasMetadata.playbackRow(for: .running) == PetAtlasMetadata.rowsByState[.running])
+    }
 }

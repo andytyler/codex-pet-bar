@@ -1,0 +1,48 @@
+import { expect, test } from "bun:test";
+import { readFileSync } from "node:fs";
+import { fileURLToPath } from "node:url";
+
+const pageSource = readFileSync(fileURLToPath(new URL("./+page.svelte", import.meta.url)), "utf8");
+
+test("install code copy box composes local shadcn-svelte primitives", () => {
+	expect(pageSource).toContain('import { Button } from "$lib/components/ui/button";');
+	expect(pageSource).toContain('import { Card, CardAction, CardContent, CardHeader } from "$lib/components/ui/card";');
+	expect(pageSource).toContain('import { Separator } from "$lib/components/ui/separator";');
+	expect(pageSource).toContain('import { Tabs, TabsContent, TabsList, TabsTrigger } from "$lib/components/ui/tabs";');
+	expect(pageSource).toContain('import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "$lib/components/ui/tooltip";');
+	expect(pageSource).toContain('data-testid="install-code-box"');
+	expect(pageSource).toContain('data-testid="install-code-tabs"');
+	expect(pageSource).toContain('data-testid="install-code-panel"');
+	expect(pageSource).toContain('data-testid="install-code-tab-brew"');
+	expect(pageSource).toContain('data-testid="install-code-tab-source"');
+	expect(pageSource).toContain('data-testid="install-code-content-brew"');
+	expect(pageSource).toContain('data-testid="install-code-content-source"');
+	expect(pageSource).toContain('const brewInstallCommand = "brew install --cask andytyler/tap/codex-pet-bar";');
+	expect(pageSource).toContain('let selectedInstallMethod = $state<InstallMethod>("brew");');
+	expect(pageSource).toContain("selectedInstallCommand");
+	expect(pageSource).toContain("<Card");
+	expect(pageSource).toContain("<CardHeader");
+	expect(pageSource).toContain("<CardAction");
+	expect(pageSource).toContain("<CardContent");
+	expect(pageSource).toContain("<Tabs");
+	expect(pageSource).toContain("<TabsList");
+	expect(pageSource).toContain("<TabsTrigger");
+	expect(pageSource).toContain("<TabsContent");
+	expect(pageSource).toContain("<TooltipProvider");
+	expect(pageSource).toContain("<Tooltip");
+	expect(pageSource).toContain("<TooltipTrigger");
+	expect(pageSource).toContain("<TooltipContent");
+	expect(pageSource).toContain("<Separator");
+	expect(pageSource).toContain('value="brew"');
+	expect(pageSource).toContain("rounded-[22px]");
+	expect(pageSource).toContain("bg-white/92");
+	expect(pageSource).toContain("rounded-xl border border-zinc-200/80 bg-white/80 p-1");
+	expect(pageSource).toContain("data-[state=active]:bg-emerald-700");
+	expect(pageSource).toContain("data-[state=active]:text-white");
+	expect(pageSource).toContain("grid-cols-[auto_minmax(0,1fr)]");
+	expect(pageSource).toContain("whitespace-pre-wrap");
+	expect(pageSource).not.toContain('import Button from "$lib/components/ui/button/button.svelte";');
+	expect(pageSource).not.toContain("bg-[#0d1117]");
+	expect(pageSource).not.toContain("min-w-max");
+	expect(pageSource).not.toContain(">Terminal<");
+});

@@ -59,8 +59,15 @@ public enum CodexThreadMenuEntry: Equatable, Sendable {
 }
 
 public enum CodexSessionIndexLog {
-    public static func readRecentThreads(from url: URL, limit: Int = 12) -> [CodexThreadSummary] {
-        guard let text = try? String(contentsOf: url, encoding: .utf8) else {
+    public static func readRecentThreads(
+        from url: URL,
+        limit: Int = 12,
+        tailByteLimit: Int = 1_048_576
+    ) -> [CodexThreadSummary] {
+        guard
+            let data = try? tailData(from: url, byteLimit: tailByteLimit),
+            let text = String(data: data, encoding: .utf8)
+        else {
             return []
         }
         return recentThreads(jsonLines: text, limit: limit)
@@ -73,6 +80,12 @@ public enum CodexSessionIndexLog {
             guard let thread = CodexThreadSummary(jsonLine: String(line)) else {
                 continue
             }
+            if
+                let current = latestByID[thread.id],
+                (current.updatedAt ?? .distantPast) > (thread.updatedAt ?? .distantPast)
+            {
+                continue
+            }
             latestByID[thread.id] = thread
         }
 
@@ -81,6 +94,29 @@ public enum CodexSessionIndexLog {
         }
 
         return Array(sorted.prefix(max(0, limit)))
+    }
+
+    private static func tailData(from url: URL, byteLimit: Int) throws -> Data {
+        guard byteLimit > 0 else {
+            return Data()
+        }
+
+        let handle = try FileHandle(forReadingFrom: url)
+        defer {
+            try? handle.close()
+        }
+
+        let size = try handle.seekToEnd()
+        let limit = UInt64(byteLimit)
+        let startOffset = size > limit ? size - limit : 0
+        try handle.seek(toOffset: startOffset)
+        let data = try handle.readToEnd() ?? Data()
+
+        guard startOffset > 0, let firstNewlineIndex = data.firstIndex(of: UInt8(ascii: "\n")) else {
+            return data
+        }
+
+        return data.suffix(from: data.index(after: firstNewlineIndex))
     }
 }
 
@@ -141,15 +177,16 @@ public enum CodexThreadMenuEntries {
             entries.append(contentsOf: runningRows.map(CodexThreadMenuEntry.thread))
         }
 
-        guard !rows.isEmpty else {
+        let recentRows = rows.filter { !runningThreadIDs.contains($0.id) }
+        guard !recentRows.isEmpty else {
             return entries
         }
 
         entries.append(.sectionHeader("Recent"))
         let visibleCount = max(0, visibleRecentLimit)
-        entries.append(contentsOf: rows.prefix(visibleCount).map(CodexThreadMenuEntry.thread))
+        entries.append(contentsOf: recentRows.prefix(visibleCount).map(CodexThreadMenuEntry.thread))
 
-        let overflowRows = Array(rows.dropFirst(visibleCount))
+        let overflowRows = Array(recentRows.dropFirst(visibleCount))
         if !overflowRows.isEmpty {
             entries.append(.more(overflowRows))
         }
@@ -198,18 +235,41 @@ private extension CodexThreadSummary {
             return nil
         }
 
-        if let date = ISO8601DateFormatter.codexSessionIndex.date(from: rawValue) {
-            return date
-        }
-
-        return ISO8601DateFormatter.codexRollout.date(from: rawValue)
+        return ISO8601DateFormatter.codexDate(from: rawValue)
     }
+}
+
+extension ISO8601DateFormatter {
+    static func codexDate(from rawValue: String) -> Date? {
+        codexDateFormatterLock.lock()
+        defer { codexDateFormatterLock.unlock() }
+        return cachedCodexInternetDateTimeWithFractionalSeconds.date(from: rawValue)
+            ?? cachedCodexInternetDateTime.date(from: rawValue)
+    }
+
+    static var codexInternetDateTimeWithFractionalSeconds: ISO8601DateFormatter {
+        let formatter = ISO8601DateFormatter()
+        formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        return formatter
+    }
+
+    private static let codexDateFormatterLock = NSLock()
+
+    nonisolated(unsafe) private static let cachedCodexInternetDateTimeWithFractionalSeconds: ISO8601DateFormatter = {
+        let formatter = ISO8601DateFormatter()
+        formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        return formatter
+    }()
+
+    nonisolated(unsafe) private static let cachedCodexInternetDateTime: ISO8601DateFormatter = {
+        let formatter = ISO8601DateFormatter()
+        formatter.formatOptions = [.withInternetDateTime]
+        return formatter
+    }()
 }
 
 public extension ISO8601DateFormatter {
     static var codexSessionIndex: ISO8601DateFormatter {
-        let formatter = ISO8601DateFormatter()
-        formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
-        return formatter
+        codexInternetDateTimeWithFractionalSeconds
     }
 }
