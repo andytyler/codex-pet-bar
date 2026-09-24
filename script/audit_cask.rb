@@ -14,7 +14,7 @@ abort "Expected codex-pet-bar, found #{cask.token}" unless cask.token == "codex-
 puts "Auditing #{path}: version=#{cask.version}, sha256=#{cask.sha256}"
 # This is an update of a fixed, existing token. Rechecking its name against the
 # global catalogue can auto-install homebrew/core; keep this validation local.
-errors = Cask::Auditor.audit(cask, any_named_args: true, quarantine: true,
+errors = Cask::Auditor.audit(cask, any_named_args: true,
                            audit_online: false, audit_signing: false,
                            except: ["token_conflicts"])
 exit 1 unless errors.empty?
