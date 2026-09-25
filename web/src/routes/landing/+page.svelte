@@ -1,6 +1,8 @@
 <script lang="ts">
+  import '@fontsource-variable/dm-sans';
+  import '@fontsource-variable/fraunces';
   import { base } from '$app/paths';
-  import { ArrowUpRight, Check, Copy, Download } from '@lucide/svelte';
+  import { ArrowDown, ArrowUpRight, Check, Copy, Download } from '@lucide/svelte';
   import SpriteCell from '$lib/components/sprite-cell.svelte';
   import MenuBarDemo from './MenuBarDemo.svelte';
 
@@ -8,9 +10,9 @@
   const releases = `${repository}/releases/latest`;
   const installCommand = 'brew install --cask andytyler/tap/codex-pet-bar\ncodex-pet-bar';
   const providers = [
-    { name: 'Codex', image: 'CodexThreadGlyph.png', href: 'https://openai.com/codex/' },
-    { name: 'Claude Code', image: 'ClaudeCodeCrab.svg', href: 'https://www.anthropic.com/claude-code' },
-    { name: 'Cursor', image: 'CursorProviderIconLight.svg', href: 'https://cursor.com/' }
+    { name: 'Codex', image: 'CodexThreadGlyph.png' },
+    { name: 'Claude Code', image: 'ClaudeCodeCrab.svg' },
+    { name: 'Cursor', image: 'CursorProviderIconLight.svg' }
   ];
   let copyState = $state<'idle' | 'copied' | 'manual'>('idle');
 
@@ -25,281 +27,211 @@
 </script>
 
 <svelte:head>
-  <title>Codex Pet Bar — Your pet, in your menu bar.</title>
-  <meta name="description" content="Bring your existing Codex pet to your Mac’s menu bar. It follows your coding agents and tells you when they need you. For Codex, Claude Code and Cursor." />
-  <meta property="og:title" content="Codex Pet Bar — Your pet, in your menu bar." />
-  <meta property="og:description" content="Bring your existing Codex pet to your Mac’s menu bar. It follows your coding agents and tells you when they need you." />
-  <meta property="og:image" content={`${base}/artwork/codex-pet-bar-icon.png`} />
-  <meta name="theme-color" content="#ffffff" />
+  <title>Codex Pet Bar — Your pet. New hangout.</title>
+  <meta name="description" content="Your Codex pet, now in your Mac’s menu bar. A little company while you work, with a wave when your coding agents need you. Free and open source." />
+  <meta property="og:title" content="Codex Pet Bar — Your pet. New hangout." />
+  <meta property="og:description" content="Bring your existing Codex pet to your Mac’s menu bar. A little company while your agents do their thing." />
+  <meta property="og:image" content="https://andytyler.github.io/codex-pet-bar/artwork/open-graph/codex-pet-bar-og-clean-hero.png" />
+  <meta name="theme-color" content="#fffaf2" />
 </svelte:head>
 
 <div class="landing" id="top">
   <a class="skip-link" href="#main">Skip to content</a>
   <header class="site-header page-width">
     <a href="#top" class="brand" aria-label="Codex Pet Bar home">
-      <span class="brand-mark" aria-hidden="true"><SpriteCell src={`${base}/pets/goblin.webp`} state="idle" size={46} /></span>
+      <span class="brand-pet" aria-hidden="true"><SpriteCell src={`${base}/pets/goblin.webp`} state="idle" size={37} /></span>
       <span>Codex Pet Bar</span>
     </a>
     <nav aria-label="Main navigation">
-      <a class="secondary-nav" href="#how-it-works">How it works</a>
-      <a class="secondary-nav" href={repository} target="_blank" rel="noreferrer">GitHub</a>
-      <a class="button header-cta" href={releases} target="_blank" rel="noreferrer">Get the app</a>
+      <a class="github-link" href={repository} target="_blank" rel="noreferrer">GitHub <ArrowUpRight size={15} /></a>
+      <a class="nav-download" href={releases} target="_blank" rel="noreferrer">Get the app <Download size={16} /></a>
     </nav>
   </header>
 
   <main id="main">
-    <section class="hero page-width" aria-labelledby="hero-title">
-      <h1 id="hero-title">Your pet,<br />in your menu bar.</h1>
-      <div class="hero-intro">
-        <p class="hero-description">Bring your existing Codex pet to your Mac’s menu bar. It follows your coding agents and tells you when they need you.</p>
-        <a class="button primary" href={releases} target="_blank" rel="noreferrer"><Download size={27} strokeWidth={1.8} />Download for Mac</a>
-        <a class="install-link" href="#install">Install with Homebrew</a>
-        <p class="compatibility">macOS 14+ · Apple Silicon · Free &amp; open source</p>
-        <p class="release-note">Previewing v0.2. Downloads and Homebrew currently install v0.1.2.</p>
+    <section class="hero" aria-labelledby="hero-title">
+      <div class="hero-copy page-width">
+        <h1 id="hero-title">Your pet. <em>New hangout.</em></h1>
+        <p class="hero-description">Bring your existing Codex pet to your Mac’s menu bar.<br class="desktop-break" /> It hangs out while you work and waves when your agents need you.</p>
+        <div class="hero-actions">
+          <a class="button primary" href={releases} target="_blank" rel="noreferrer"><Download size={19} strokeWidth={1.9} />Download for Mac</a>
+          <a class="homebrew-link" href="#install">or use Homebrew <ArrowDown size={15} /></a>
+        </div>
+        <p class="compatibility">Free &amp; open source <span aria-hidden="true">·</span> macOS 14+ <span aria-hidden="true">·</span> Apple Silicon</p>
       </div>
+      <figure class="hero-art">
+        <enhanced:img src="$lib/assets/codex-pets.png" alt="A crowd of colourful Codex pets leaning over a bar, with the green goblin front and centre." sizes="(min-width: 801px) 760px, 100vw" fetchpriority="high" />
+      </figure>
     </section>
 
-    <div class="demo-shell page-width">
+    <section class="how-it-works page-width" id="how-it-works" aria-labelledby="demo-title">
+      <div class="section-heading">
+        <p class="eyebrow">Small friend. Useful little signals.</p>
+        <h2 id="demo-title">They work. You get a wave.</h2>
+        <p>See who’s busy, who needs you, and when it’s time for a breather.</p>
+      </div>
       <MenuBarDemo />
-    </div>
-
-    <section class="providers page-width" aria-label="Supported coding agents">
-      <p>Works with your local agents</p>
-      <div class="provider-links">
+      <div class="providers" aria-label="Supported coding agents">
+        <span>Keeping an eye on</span>
         {#each providers as provider (provider.name)}
-          <a href={provider.href} target="_blank" rel="noreferrer">
-            <img src={`${base}/landing-assets/${provider.image}`} alt="" width="42" height="42" />
-            <span>{provider.name}</span>
-          </a>
+          <span class="provider"><img src={`${base}/landing-assets/${provider.image}`} alt="" width="23" height="23" /><strong>{provider.name}</strong></span>
         {/each}
       </div>
     </section>
 
-    <section class="features page-width" id="how-it-works" aria-labelledby="features-title">
-      <h2 id="features-title">Small pet.<br />Useful signals.</h2>
-      <ol class="feature-list">
-        <li>
-          <span class="feature-number" aria-hidden="true">01</span>
-          <div>
-            <h3>Know when you’re needed.</h3>
-            <p>A provider flag tells you which task needs attention.</p>
+    <section class="installation page-width" id="install" aria-labelledby="install-title">
+      <div class="install-copy">
+        <span class="install-pet" aria-hidden="true"><SpriteCell src={`${base}/pets/goblin.webp`} state="waving" size={65} /></span>
+        <h2 id="install-title">Room for one more?</h2>
+        <p>Install Pet Bar. Your selected Codex pet comes along.</p>
+        <a class="button primary" href={releases} target="_blank" rel="noreferrer"><Download size={18} />Get the Mac app</a>
+        <p class="install-hint">Move CodexPetBar.app to Applications, then open it.</p>
+      </div>
+      <div class="install-options">
+        <div class="terminal" aria-label="Homebrew installation commands">
+          <div class="terminal-header">
+            <span>More of a Terminal person?</span>
+            <button type="button" onclick={copyCommand} aria-label="Copy Homebrew install command">
+              {#if copyState === 'copied'}<Check size={16} />{:else}<Copy size={16} />{/if}
+              {copyState === 'copied' ? 'Copied' : 'Copy'}
+            </button>
           </div>
-        </li>
-        <li>
-          <span class="feature-number" aria-hidden="true">02</span>
-          <div>
-            <h3>The context is one hover away.</h3>
-            <p>See task summaries, grouped by project, without switching windows.</p>
-          </div>
-        </li>
-        <li>
-          <span class="feature-number" aria-hidden="true">03</span>
-          <div>
-            <h3>Your pet comes with you.</h3>
-            <p>Automatically follows your selected Codex pet, including custom pets.</p>
-          </div>
-        </li>
-      </ol>
-    </section>
-
-    <section class="installation" id="install" aria-labelledby="install-title">
-      <div class="installation-inner page-width">
-        <div class="install-intro">
-          <h2 id="install-title">A new home<br />in your menu bar.</h2>
-          <p>Install the app. Connect your agents. Get back to making things.</p>
+          <pre><code>{installCommand}</code></pre>
         </div>
-        <div class="install-steps">
-          <div class="terminal" aria-label="Homebrew installation commands">
-            <div class="terminal-header">
-              <span class="window-controls" aria-hidden="true"><i></i><i></i><i></i></span>
-              <span class="terminal-title">Terminal</span>
-              <button class="copy-button" type="button" onclick={copyCommand} aria-label="Copy Homebrew install command">
-                {#if copyState === 'copied'}<Check size={18} strokeWidth={1.7} />{:else}<Copy size={18} strokeWidth={1.7} />{/if}
-                <span>{copyState === 'copied' ? 'Copied' : 'Copy'}</span>
-              </button>
-            </div>
-            <pre><code><span class="command-line"><span class="prompt" aria-hidden="true">$</span>brew install --cask andytyler/tap/codex-pet-bar</span><span class="command-line"><span class="prompt" aria-hidden="true">$</span>codex-pet-bar</span></code></pre>
-          </div>
-          <div class={['copy-status', { visible: copyState === 'manual' }]} role="status" aria-live="polite">
-            {#if copyState === 'copied'}Copied. Ready to paste into Terminal.{:else if copyState === 'manual'}Select and copy the command above; clipboard access is unavailable.{/if}
-          </div>
-          <div class="integration-instructions">
-            <p><strong>In v0.2, choose Integrations → Install All in the pet menu.</strong></p>
-            <p>Pet Bar will ask whether to open at login. Your choice, always.</p>
-          </div>
-          <div class="download-instructions">
-            <a class="text-link" href={releases} target="_blank" rel="noreferrer">Prefer a download? Get the Mac app<ArrowUpRight size={19} strokeWidth={1.7} /></a>
-            <p>Move CodexPetBar.app to Applications, then open it.</p>
-          </div>
-        </div>
+        <p class="copy-status" role="status" aria-live="polite">{copyState === 'copied' ? 'Copied. Ready to paste into Terminal.' : copyState === 'manual' ? 'Select and copy the command above; clipboard access is unavailable.' : ''}</p>
+        <p class="release-note"><strong>Available now: v0.1.2.</strong> The demo previews v0.2, coming soon.</p>
+        <details>
+          <summary>What’s coming in v0.2?</summary>
+          <p>Click your pet for tasks and agent connections. Pet Bar will also ask whether to open at login. Your choice, always.</p>
+        </details>
       </div>
     </section>
   </main>
 
   <footer class="page-width">
-    <a class="footer-brand" href="#top">Codex Pet Bar</a>
-    <p>Runs locally on your Mac.</p>
-    <a class="text-link" href={repository} target="_blank" rel="noreferrer">GitHub<ArrowUpRight size={18} strokeWidth={1.7} /></a>
+    <span>Little pet. Entirely on your Mac.</span>
+    <a href={repository} target="_blank" rel="noreferrer">Made for the fun of it. Open source. <ArrowUpRight size={15} /></a>
   </footer>
 </div>
 
 <style>
-  :global(html) { scroll-behavior: smooth; scroll-padding-top: 32px; }
+  :global(html) { scroll-behavior: smooth; scroll-padding-top: 30px; }
   :global(body) { margin: 0; }
-  .landing { --ink: #0c0c0e; --muted: #737780; --border: #dfe1e5; --orange: #ef542f; min-height: 100vh; background: #fff; color: var(--ink); font-family: 'Helvetica Neue', Helvetica, Arial, -apple-system, BlinkMacSystemFont, sans-serif; -webkit-font-smoothing: antialiased; }
+  .landing { --ink: #22382d; --muted: #667267; --paper: #fffaf2; --orange: #d75631; --line: #dce0d4; color: var(--ink); background: var(--paper); min-height: 100vh; font-family: 'DM Sans Variable', sans-serif; -webkit-font-smoothing: antialiased; }
   .landing :global(*) { box-sizing: border-box; }
   .landing :global(a) { color: inherit; }
-  .landing :global(a), .landing :global(button) { -webkit-tap-highlight-color: transparent; }
-  .landing :global(a:focus-visible), .landing :global(button:focus-visible) { outline: 3px solid var(--orange); outline-offset: 5px; }
-  .landing :global(::selection) { background: #ffe0d7; color: var(--ink); }
-  .page-width { width: min(1320px, calc(100% - 128px)); margin-inline: auto; }
+  .landing :global(a:focus-visible), .landing :global(button:focus-visible), summary:focus-visible { outline: 3px solid var(--orange); outline-offset: 5px; }
+  .landing :global(::selection) { background: #f6d8a4; color: var(--ink); }
   a { text-decoration: none; }
-  .skip-link { position: fixed; z-index: 100; top: -80px; left: 24px; padding: 14px 20px; border-radius: 6px; background: var(--ink); }
-  .landing .skip-link { color: #fff; }
+  .page-width { width: min(1120px, calc(100% - 80px)); margin-inline: auto; }
+  .skip-link { position: fixed; top: -80px; left: 20px; z-index: 20; padding: 12px 18px; background: var(--ink); border-radius: 8px; }
+  .landing .skip-link { color: var(--paper); }
   .skip-link:focus { top: 16px; }
-  .site-header { height: 90px; display: flex; align-items: center; justify-content: space-between; gap: 24px; }
-  .brand { display: inline-flex; align-items: center; gap: 13px; white-space: nowrap; font-size: 28px; line-height: 1.1; font-weight: 750; letter-spacing: -1.15px; }
-  .brand-mark { display: flex; width: 46px; height: 50px; align-items: center; justify-content: center; }
-  nav { display: flex; gap: 40px; align-items: center; font-size: 17px; line-height: 1.2; font-weight: 550; letter-spacing: -.3px; }
-  nav a:not(.button):hover { text-decoration: underline; text-underline-offset: 5px; }
-  .button { display: inline-flex; justify-content: center; align-items: center; gap: 19px; border: 1px solid transparent; border-radius: 10px; font-weight: 600; line-height: 1.2; letter-spacing: -.5px; transition: background 160ms ease, transform 160ms ease; }
-  .button:hover { transform: translateY(-2px); }
-  .landing .header-cta { min-height: 54px; padding: 14px 24px; color: #fff; background: var(--orange); font-size: 17px; }
-  .header-cta:hover { background: #da4625; }
-  .hero { display: grid; grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr); align-items: start; gap: 52px; padding-block: 35px 28px; }
-  h1 { margin: 0; font-size: clamp(55px, 6vw, 88px); font-weight: 750; line-height: 1.01; letter-spacing: -.066em; }
-  .hero-intro { padding-top: 0; }
-  .hero-description { margin: 0; font-size: 20px; line-height: 1.4; letter-spacing: -.4px; max-width: 600px; }
-  .landing .primary { min-height: 60px; padding: 14px 26px; margin-top: 14px; background: var(--ink); color: #fff; font-size: 23px; }
-  .primary:hover { background: #28292d; }
-  .install-link { display: table; font-size: 20px; line-height: 1.3; letter-spacing: -.3px; margin-top: 12px; text-decoration: underline; text-underline-offset: 3px; }
-  .install-link:hover, .text-link:hover { color: var(--orange); }
-  .compatibility { margin: 18px 0 0; color: var(--muted); font-size: 15px; line-height: 1.5; letter-spacing: -.2px; }
-  .release-note { margin: 9px 0 0; max-width: 380px; font-size: 12px; line-height: 1.5; color: #737780; }
-  .providers { border-top: 1px solid var(--border); text-align: center; padding-block: 33px 43px; }
-  .providers > p { margin: 0 0 20px; font-size: 16px; line-height: 1.4; color: var(--muted); letter-spacing: -.3px; }
-  .provider-links { display: flex; align-items: center; justify-content: center; gap: 76px; }
-  .provider-links a { display: inline-flex; align-items: center; gap: 15px; font-size: 24px; line-height: 1.2; font-weight: 550; letter-spacing: -.6px; }
-  .provider-links a:hover span { text-decoration: underline; text-underline-offset: 5px; }
-  .provider-links img { object-fit: contain; flex-shrink: 0; }
-  .provider-links a:first-child img { filter: brightness(0); }
-  .features { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 64px; padding-block: 63px 67px; }
-  .features h2 { margin: 50px 0 0; font-size: clamp(48px, 4.7vw, 70px); line-height: 1.02; letter-spacing: -.058em; font-weight: 750; }
-  .feature-list { list-style: none; margin: 0; padding: 0; }
-  .feature-list li { display: grid; grid-template-columns: 39px minmax(0, 1fr); gap: 20px; border-top: 1px solid #cdd0d5; padding: 22px 0 30px; }
-  .feature-list li:last-child { padding-bottom: 0; }
-  .feature-number { color: var(--orange); font-size: 21px; line-height: 1.4; font-weight: 650; letter-spacing: -.6px; }
-  .feature-list h3 { margin: 0 0 4px; font-size: 26px; line-height: 1.25; font-weight: 700; letter-spacing: -1px; }
-  .feature-list p { margin: 0; color: var(--muted); font-size: 19px; line-height: 1.45; letter-spacing: -.3px; }
-  .text-link { display: inline-flex; align-items: center; gap: 8px; text-decoration: underline; text-underline-offset: 4px; text-decoration-thickness: 1px; }
-  .text-link :global(svg) { flex-shrink: 0; }
-  .installation { background: #101112; color: #fff; }
-  .installation-inner { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 64px; padding-block: 58px 50px; }
-  .install-intro { padding-top: 41px; }
-  .installation h2 { margin: 0; font-size: clamp(44px, 4.5vw, 67px); line-height: 1.04; font-weight: 750; letter-spacing: -.048em; }
-  .install-intro > p { max-width: 630px; margin: 24px 0 0; font-size: 19px; line-height: 1.5; color: #b5b7be; letter-spacing: -.35px; }
-  .install-steps { min-width: 0; }
-  .terminal { border: 1px solid #37393b; border-radius: 9px; overflow: hidden; background: #1b1d1e; }
-  .terminal-header { display: flex; align-items: center; gap: 24px; min-height: 47px; padding: 8px 17px; background: #242729; border-bottom: 1px solid #36383b; }
-  .window-controls { display: flex; align-items: center; gap: 8px; }
-  .window-controls i { display: block; width: 13px; height: 13px; background: #ff5d56; border-radius: 50%; }
-  .window-controls i:nth-child(2) { background: #ffbe2f; }
-  .window-controls i:nth-child(3) { background: #29c840; }
-  .terminal-title { color: #b8bbc3; font-size: 15px; line-height: 1.4; }
-  .copy-button { display: inline-flex; align-items: center; gap: 9px; padding: 5px 6px; margin-left: auto; border: 0; border-radius: 4px; background: transparent; color: #fff; font: inherit; font-size: 14px; line-height: 20px; cursor: pointer; }
-  .copy-button:hover { background: #ffffff12; }
-  pre { margin: 0; padding: 25px 21px 24px; overflow-x: auto; }
-  code { display: block; font: 17px/1.8 'SFMono-Regular', Consolas, 'Liberation Mono', monospace; letter-spacing: -.25px; user-select: all; }
-  .command-line { display: block; white-space: pre; }
-  .prompt { display: inline-block; padding-right: 11px; color: var(--orange); user-select: none; }
-  .copy-status { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
-  .copy-status.visible { position: static; width: auto; height: auto; clip-path: none; white-space: normal; padding-top: 8px; color: #d4d5d8; font-size: 13px; }
-  .integration-instructions { margin-top: 23px; }
-  .integration-instructions p { margin: 0; font-size: 18px; line-height: 1.55; color: #b5b7be; letter-spacing: -.3px; }
-  .integration-instructions strong { color: #fff; font-weight: 650; }
-  .download-instructions { margin-top: 34px; }
-  .download-instructions a { font-size: 18px; line-height: 1.45; letter-spacing: -.3px; }
-  .download-instructions p { margin: 6px 0 0; color: #b5b7be; font-size: 16px; line-height: 1.5; letter-spacing: -.25px; }
-  footer { display: flex; align-items: center; justify-content: space-between; gap: 28px; min-height: 99px; padding-block: 26px; }
-  .footer-brand { font-size: 22px; line-height: 1.2; font-weight: 700; letter-spacing: -.6px; }
-  footer p { margin: 0; color: var(--muted); font-size: 16px; line-height: 1.5; letter-spacing: -.3px; }
-  footer .text-link { font-size: 17px; line-height: 1.4; }
-  @media (max-width: 1190px) {
-    .page-width { width: calc(100% - 80px); }
-    .hero { grid-template-columns: 1.25fr 1fr; gap: 36px; }
-    h1 { font-size: clamp(50px, 5.7vw, 74px); }
-    .hero-description { font-size: 20px; }
-    .compatibility { font-size: 13px; }
-    .features, .installation-inner { gap: 40px; }
-    .feature-list h3 { font-size: 23px; }
-    .feature-list p { font-size: 17px; }
-    .feature-list li { grid-template-columns: 28px minmax(0, 1fr); gap: 16px; }
-    .installation h2 { font-size: 52px; }
-    code { font-size: 14px; }
-    .integration-instructions p, .download-instructions a, .install-intro > p { font-size: 17px; }
-    .download-instructions p { font-size: 14px; }
-  }
+  .site-header { display: flex; justify-content: space-between; align-items: center; gap: 24px; min-height: 78px; }
+  .brand { display: flex; gap: 9px; align-items: center; font-size: 20px; font-weight: 750; letter-spacing: -.7px; white-space: nowrap; }
+  .brand-pet { width: 37px; height: 42px; }
+  nav { display: flex; align-items: center; gap: 28px; font-size: 14px; font-weight: 600; }
+  nav a, footer a { display: inline-flex; align-items: center; gap: 6px; }
+  nav a:hover, footer a:hover { color: var(--orange); }
+  .nav-download { padding: 11px 17px; border: 1px solid #cdd4c6; border-radius: 999px; }
+  .hero { padding-top: 14px; text-align: center; }
+  .eyebrow { display: flex; justify-content: center; align-items: center; gap: 7px; margin: 0 0 18px; font-size: 13px; font-weight: 650; }
+  h1, h2 { font-family: 'Fraunces Variable', Georgia, serif; font-weight: 600; font-variation-settings: 'SOFT' 100, 'WONK' 1; }
+  h1 { margin: 0; font-size: clamp(48px, 5.8vw, 74px); line-height: 1.06; letter-spacing: -.065em; }
+  h1 em { font-style: normal; color: var(--orange); }
+  .hero-description { margin: 18px auto 0; max-width: 620px; font-size: 17px; line-height: 1.5; letter-spacing: -.25px; }
+  .hero-actions { display: flex; justify-content: center; align-items: center; gap: 24px; margin-top: 22px; }
+  .button { display: inline-flex; justify-content: center; align-items: center; gap: 10px; border-radius: 999px; font-size: 15px; font-weight: 650; min-height: 49px; padding: 13px 24px; transition: transform 160ms ease, background 160ms ease; }
+  .landing .primary { color: #fffaf2; background: var(--ink); }
+  .primary:hover { background: #365441; transform: translateY(-2px); }
+  .homebrew-link { display: inline-flex; align-items: center; gap: 7px; font-size: 14px; text-decoration: underline; text-underline-offset: 4px; }
+  .homebrew-link:hover { color: var(--orange); }
+  .compatibility { display: flex; justify-content: center; flex-wrap: wrap; gap: 8px; margin: 12px 0 0; color: var(--muted); font-size: 11px; line-height: 1.5; }
+  .hero-art { position: relative; width: min(760px, 96%); margin: 16px auto 0; }
+  .hero-art :global(img) { display: block; width: 100%; height: auto; }
+  .how-it-works { padding-block: 38px 66px; }
+  .section-heading { text-align: center; margin-bottom: 27px; }
+  .section-heading .eyebrow { color: var(--orange); margin-bottom: 12px; }
+  h2 { margin: 0; font-size: clamp(32px, 3.5vw, 43px); line-height: 1.15; letter-spacing: -.045em; }
+  .section-heading > p:last-child { margin: 15px 0 0; font-size: 15px; line-height: 1.55; color: var(--muted); }
+  .providers { display: flex; justify-content: center; align-items: center; flex-wrap: wrap; gap: 25px; margin-top: 30px; font-size: 13px; }
+  .providers > span:first-child { color: var(--muted); }
+  .provider { display: inline-flex; align-items: center; gap: 8px; }
+  .provider strong { font-size: 14px; font-weight: 650; }
+  .provider img { object-fit: contain; }
+  .provider:nth-child(2) img { filter: brightness(0); }
+  .installation { display: grid; grid-template-columns: 1fr 1fr; gap: 65px; padding-block: 46px 55px; border-top: 1px solid var(--line); align-items: center; }
+  .install-copy { position: relative; padding-top: 12px; }
+  .install-pet { display: block; height: 65px; margin-bottom: 10px; }
+  .install-copy > p { margin: 15px 0 22px; font-size: 15px; line-height: 1.6; }
+  .install-copy .install-hint { margin: 14px 0 0; font-size: 12px; color: var(--muted); }
+  .install-options { min-width: 0; padding-top: 27px; }
+  .terminal { overflow: hidden; border: 1px solid #d8dfd0; background: #edf0e7; border-radius: 12px; }
+  .terminal-header { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 14px 17px 5px; font-size: 12px; }
+  .terminal-header > span { color: #5c6c59; }
+  .terminal button { display: flex; align-items: center; gap: 5px; min-height: 30px; border: 0; border-radius: 5px; padding: 4px 7px; color: var(--ink); background: transparent; font: inherit; cursor: pointer; }
+  .terminal button:hover { background: #dce4d6; }
+  pre { margin: 0; padding: 14px 21px 22px; white-space: pre-wrap; overflow-wrap: anywhere; }
+  code { font: 12px/1.9 'SFMono-Regular', Consolas, monospace; user-select: all; }
+  .copy-status { margin: 5px 0 0; font-size: 12px; line-height: 1.5; }
+  .copy-status:empty { display: none; }
+  .release-note { color: var(--muted); margin: 16px 0 12px; font-size: 12px; line-height: 1.6; }
+  .release-note strong { color: var(--ink); font-weight: 600; }
+  details { font-size: 12px; line-height: 1.6; }
+  summary { cursor: pointer; width: fit-content; text-underline-offset: 3px; }
+  summary:hover { text-decoration: underline; }
+  details p { margin: 9px 0 0; max-width: 420px; color: var(--muted); }
+  footer { display: flex; justify-content: space-between; gap: 20px; align-items: center; min-height: 78px; border-top: 1px solid var(--line); font-size: 12px; color: var(--muted); }
   @media (max-width: 800px) {
     .page-width { width: calc(100% - 48px); }
-    .site-header { height: 78px; gap: 14px; }
-    .brand { font-size: 22px; gap: 8px; letter-spacing: -.8px; }
-    .brand-mark { width: 35px; height: 40px; }
-    .brand-mark :global(.cell) { transform: scale(.8); }
-    nav { gap: 20px; }
-    .secondary-nav { display: none; }
-    .landing .header-cta { min-height: 43px; padding: 11px 15px; font-size: 14px; border-radius: 8px; }
-    .hero { grid-template-columns: 1fr; gap: 27px; padding-block: 35px 36px; }
-    h1 { font-size: clamp(48px, 8.6vw, 68px); line-height: 1.04; letter-spacing: -.064em; }
-    .hero-intro { max-width: 550px; }
-    .hero-description { font-size: 20px; line-height: 1.45; letter-spacing: -.3px; }
-    .landing .primary { margin-top: 22px; min-height: 58px; padding: 15px 23px; font-size: 20px; gap: 13px; }
-    .install-link { font-size: 17px; margin-top: 15px; }
-    .compatibility { font-size: 12px; margin-top: 20px; line-height: 1.6; }
-    .providers { padding-block: 25px 33px; }
-    .providers > p { font-size: 14px; margin-bottom: 21px; }
-    .provider-links { gap: 29px; }
-    .provider-links a { gap: 10px; font-size: 18px; letter-spacing: -.3px; }
-    .provider-links img { width: 31px; height: 31px; }
-    .features { grid-template-columns: 1fr; gap: 33px; padding-block: 43px 48px; }
-    .features h2 { margin: 0; font-size: 54px; letter-spacing: -.06em; }
-    .feature-list li { padding-block: 23px 27px; grid-template-columns: 29px minmax(0, 1fr); gap: 17px; }
-    .feature-list h3 { font-size: 24px; line-height: 1.2; letter-spacing: -.9px; }
-    .feature-list p { font-size: 18px; line-height: 1.5; }
-    .feature-number { font-size: 18px; }
-    .installation-inner { grid-template-columns: 1fr; gap: 32px; padding-block: 45px 43px; }
-    .install-intro { padding: 0; }
-    .installation h2 { font-size: 50px; line-height: 1.05; letter-spacing: -.055em; }
-    .install-intro > p { font-size: 18px; line-height: 1.55; margin-top: 19px; }
-    .terminal-header { min-height: 44px; padding-inline: 13px; gap: 17px; }
-    .terminal-title, .copy-button { font-size: 13px; }
-    .window-controls { gap: 7px; }
-    .window-controls i { width: 11px; height: 11px; }
-    pre { padding: 21px 16px; }
-    code { font-size: 13px; line-height: 1.85; }
-    .command-line { white-space: pre-wrap; overflow-wrap: anywhere; padding-left: 17px; text-indent: -17px; }
-    .prompt { padding-right: 8px; }
-    .integration-instructions { margin-top: 22px; }
-    .integration-instructions p { font-size: 17px; line-height: 1.55; }
-    .integration-instructions p + p { margin-top: 6px; }
-    .download-instructions { margin-top: 27px; }
-    .download-instructions a { font-size: 17px; gap: 5px; }
-    .download-instructions p { font-size: 15px; }
-    footer { min-height: 110px; flex-wrap: wrap; gap: 18px; padding-block: 26px; }
-    .footer-brand { font-size: 21px; }
-    footer p { order: 3; width: 100%; font-size: 14px; }
-    footer .text-link { font-size: 16px; }
+    .site-header { min-height: 78px; }
+    .hero { padding-top: 32px; }
+    h1 { max-width: 660px; margin-inline: auto; }
+    .hero-description { font-size: 16px; max-width: 520px; }
+    .hero-art { margin-top: 32px; width: 100%; }
+    .how-it-works { padding-block: 62px 44px; }
+    .installation { gap: 32px; }
+    .installation h2 { font-size: 33px; }
+    .terminal-header { padding-inline: 12px; }
+    code { font-size: 11px; }
+    pre { padding-inline: 16px; }
   }
-  @media (max-width: 480px) {
-    h1 { font-size: clamp(32px, 10.4vw, 46px); }
-    .brand { font-size: 20px; gap: 6px; }
-    .brand-mark { width: 32px; }
-    .landing .header-cta { font-size: 13px; padding-inline: 13px; }
-    .hero-description { font-size: 18px; }
-    .provider-links { justify-content: space-between; gap: 14px; }
-    .provider-links a { flex-direction: column; gap: 10px; font-size: 16px; }
-    .provider-links img { width: 34px; height: 34px; }
-    .features h2 { font-size: 48px; }
-    .installation h2 { font-size: 44px; }
+  @media (max-width: 580px) {
+    .page-width { width: calc(100% - 36px); }
+    .site-header { min-height: 74px; gap: 12px; }
+    .brand { font-size: 17px; gap: 5px; }
+    .brand-pet { width: 32px; }
+    .github-link { display: none; }
+    .nav-download { padding: 9px 12px; font-size: 12px; gap: 5px; }
+    .hero { padding-top: 28px; }
+    .eyebrow { font-size: 11px; margin-bottom: 18px; gap: 5px; }
+    h1 { font-size: clamp(43px, 11.3vw, 63px); line-height: 1.07; letter-spacing: -.06em; }
+    h1 em { display: block; }
+    .hero-description { font-size: 15px; line-height: 1.6; max-width: 340px; margin-top: 20px; }
+    .desktop-break { display: none; }
+    .hero-actions { gap: 17px; margin-top: 23px; flex-wrap: wrap; }
+    .button { min-height: 46px; padding: 12px 19px; font-size: 14px; }
+    .homebrew-link { font-size: 12px; gap: 4px; }
+    .compatibility { font-size: 10px; gap: 6px; margin-top: 17px; }
+    .hero-art { margin-top: 26px; }
+    .how-it-works { padding-block: 49px 39px; }
+    h2 { font-size: 32px; }
+    .section-heading { margin-bottom: 21px; }
+    .section-heading > p:last-child { max-width: 300px; margin-inline: auto; font-size: 14px; }
+    .providers { gap: 15px; margin-top: 24px; }
+    .providers > span:first-child { width: 100%; text-align: center; font-size: 11px; }
+    .provider { gap: 6px; }
+    .provider strong { font-size: 12px; }
+    .provider img { width: 20px; height: 20px; }
+    .installation { grid-template-columns: 1fr; gap: 29px; padding-block: 28px 35px; text-align: center; }
+    .install-pet { width: 65px; margin-inline: auto; }
+    .install-copy > p { font-size: 14px; margin-bottom: 20px; }
+    .install-copy .install-hint { font-size: 11px; }
+    .install-options { padding-top: 0; text-align: left; }
+    .terminal-header { font-size: 12px; }
+    pre { padding: 12px 17px 20px; }
+    code { font-size: 12px; }
+    footer { min-height: 90px; flex-direction: column; justify-content: center; gap: 8px; font-size: 11px; padding-block: 21px; text-align: center; }
   }
   @media (prefers-reduced-motion: reduce) {
     :global(html) { scroll-behavior: auto; }

@@ -1,8 +1,9 @@
 node_modules
 
-# Earlier local image experiments (the active site uses static/).
+# Keep local image experiments out; retain the selected landing artwork.
 /src/lib/assets/*
 !/src/lib/assets/codex-logo.png
+!/src/lib/assets/codex-pets.png
 
 # Output
 .output
