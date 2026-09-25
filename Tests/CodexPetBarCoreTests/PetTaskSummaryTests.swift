@@ -146,7 +146,7 @@ struct PetTaskSummaryTests {
         #expect(Set(tasks.map(\.id)).count == 2)
         #expect(tasks.map(\.provider) == [.cursor, .claude])
         #expect(tasks.map(\.status) == [.waiting, .completed])
-        #expect(tasks.map(\.title) == ["Cursor task", "Claude Code task"])
+        #expect(tasks.map(\.title) == ["Cursor · same-session", "Claude Code · same-session"])
         #expect(tasks[1].detail == "Implemented the provider adapter and verified the tests")
         #expect(tasks.allSatisfy { !$0.detail.contains("prompt") })
     }

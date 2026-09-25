@@ -79,7 +79,8 @@ public struct PetTaskSummary: Equatable, Identifiable, Sendable {
         self.sourceID = sourceID
         self.navigationSourceID = navigationSourceID
         self.provider = provider
-        self.title = Self.concise(title, limit: Self.maximumTitleLength, fallback: Self.fallbackTitle(for: provider))
+        self.title = Self.concise(title, limit: Self.maximumTitleLength,
+                                  fallback: Self.fallbackTitle(for: provider, sourceID: sourceID))
         self.detail = Self.concise(detail, limit: Self.maximumDetailLength, fallback: "Recent activity")
         self.status = status
         self.project = project
@@ -104,15 +105,17 @@ public struct PetTaskSummary: Equatable, Identifiable, Sendable {
         return String(value.prefix(limit - 3)) + "..."
     }
 
-    private static func fallbackTitle(for provider: PetProvider) -> String {
-        switch provider {
-        case .codex:
-            "Codex task"
-        case .claude:
-            "Claude Code task"
-        case .cursor:
-            "Cursor task"
-        }
+    /// Normalized provider events do not include a task title. Keep their real
+    /// session identity visible rather than turning activity prose into a name.
+    static func fallbackTitle(for provider: PetProvider, sourceID: String) -> String {
+        guard provider != .codex else { return "Codex task" }
+        let providerName = provider == .claude ? "Claude Code" : "Cursor"
+        let identity = sourceID.split(whereSeparator: \.isWhitespace).joined(separator: " ")
+        guard !identity.isEmpty else { return "\(providerName) task" }
+        // UUID prefixes often share their timestamp; their suffix distinguishes
+        // concurrently created sessions and preserves child-run suffixes.
+        let shortIdentity = identity.count > 12 ? "…\(identity.suffix(8))" : identity
+        return "\(providerName) · \(shortIdentity)"
     }
 }
 
@@ -485,7 +488,7 @@ public enum PetTaskSummaryBuilder {
                 sourceID: sourceID,
                 navigationSourceID: event.parentSessionID ?? sourceID,
                 provider: event.provider,
-                title: fallbackTitle(for: event.provider),
+                title: PetTaskSummary.fallbackTitle(for: event.provider, sourceID: sourceID),
                 detail: detail(
                     for: candidate.context.lifecycleState,
                     provider: event.provider,
@@ -546,7 +549,7 @@ public enum PetTaskSummaryBuilder {
             let navigationID = scope.parentSessionID ?? sourceID
             let status = taskStatus(scope.activity)
             result.append(PetTaskSummary(sourceID: sourceID, navigationSourceID: navigationID,
-                provider: scope.provider, title: fallbackTitle(for: scope.provider),
+                provider: scope.provider, title: PetTaskSummary.fallbackTitle(for: scope.provider, sourceID: sourceID),
                 detail: taskDetail(status), status: status,
                 project: PetTaskProject.derived(fromWorkspace: scope.workspace),
                 updatedAt: scope.timestamp.map(Date.init(timeIntervalSince1970:)) ?? now,
@@ -813,17 +816,6 @@ public enum PetTaskSummaryBuilder {
             return "Working"
         case .completed:
             return "Finished recently"
-        }
-    }
-
-    private static func fallbackTitle(for provider: PetProvider) -> String {
-        switch provider {
-        case .codex:
-            "Codex task"
-        case .claude:
-            "Claude Code task"
-        case .cursor:
-            "Cursor task"
         }
     }
 

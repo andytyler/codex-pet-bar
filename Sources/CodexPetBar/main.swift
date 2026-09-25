@@ -30,6 +30,19 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         NSApp.setActivationPolicy(.accessory)
+        if let argument = ProcessInfo.processInfo.arguments.first(where: { $0.hasPrefix("--render-task-pets=") }) {
+            do {
+                try PetTaskStripPreviewRenderer.render(
+                    to: URL(fileURLWithPath: String(argument.dropFirst("--render-task-pets=".count))),
+                    dark: ProcessInfo.processInfo.arguments.contains("--preview-dark")
+                )
+            } catch {
+                FileHandle.standardError.write(Data("Could not render task pets: \(error)\n".utf8))
+                exit(1)
+            }
+            NSApp.terminate(nil)
+            return
+        }
         if let renderArgument = ProcessInfo.processInfo.arguments.first(where: { $0.hasPrefix("--render-task-panel=") }) {
             let path = String(renderArgument.dropFirst("--render-task-panel=".count))
             do {
@@ -90,6 +103,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool {
         false
+    }
+
+    func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool {
+        controller?.presentTaskPanel()
+        return false
     }
 }
 

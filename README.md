@@ -14,7 +14,7 @@ CodexPetBar puts an animated pet in your macOS menu bar. It can follow the pet s
 
 [Website](https://pet.ajt.dev/) · [Download the latest release](https://github.com/andytyler/codex-pet-bar/releases/latest)
 
-**Release status:** this branch contains v0.2.0, pending Apple notarization. Public downloads and Homebrew currently provide v0.1.2. The features documented below describe v0.2.0; build from source to try them now.
+**Release status:** this branch contains v0.3.0, pending Apple notarization. Public downloads and Homebrew currently provide v0.1.2. The features documented below describe v0.3.0; build from source to try them now.
 
 ## Install
 
@@ -61,7 +61,16 @@ For a development-only run without copying the app into `~/Applications`:
 
 ## Use
 
-CodexPetBar has no Dock icon. Up to 32 active local tasks get their own provider flag beside the pet: Codex, orange Claude, or Cursor. Waiting and failure attention stays attached to the task that needs it, including when several providers are active together. To keep the menu bar bounded under pathological loads, more than 32 simultaneous scopes become 30 attention-prioritized flags plus a compact `+N` marker; every retained task remains available in the task list. Hover for a quick look, or **click the pet to keep its task panel open**. Tasks needing input appear first, with readable status labels and project context. Click a task to return to it. Escape, clicking outside, or clicking the pet again closes the panel. **Right-click** (or use the settings button) for Pets, Appearance, agent integrations, Utilities, Open at Login, and Quit.
+CodexPetBar lives in the menu bar. Click your pet to open the task board. **Needs you** comes first, then **Working**, with **Recent** tucked away below. Search by task, project, or agent. Each row shows its pet, title, latest update, status, and a clear action to open the task or project. Navigation failures stay visible with an explanation.
+
+Choose a menu-bar mode at the top of the board:
+
+- **One companion** follows your selected Codex pet, with activity and provider signals.
+- **Pets per task** gives active tasks their own companions, with up to four visible pets. Tasks needing attention come first; **+N** opens the rest. Click a pet to open its task, or the chevron to see the board. When work finishes, your usual companion returns.
+
+Click a task’s portrait to choose its pet. Assignments stay on this Mac across restarts. Pets come from your existing local library; tasks may share a pet when the library is smaller than your active task list.
+
+Hover for a quick look, or click to keep the board open. Escape, an outside click, or another click on the overview closes it. The settings button opens Pets, Appearance, agent integrations, Utilities, Open at Login, and Quit. In one-companion mode, right-click also opens settings; in task-pet mode, right-click opens the board.
 
 On first launch from Applications, Pet Bar asks whether to **Open at Login**. Choose **Not Now** to leave it off. You can change the setting later from the pet menu. macOS may require approval in System Settings → General → Login Items.
 

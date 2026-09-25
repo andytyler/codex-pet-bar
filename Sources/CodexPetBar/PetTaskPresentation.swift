@@ -91,6 +91,8 @@ struct PetTaskPresentation: Identifiable, Equatable, Sendable {
     let state: PetTaskStatePresentation
     let deepLinkURL: URL?
     let projectURL: URL?
+    var projectName: String = ""
+    var updatedAt: Date? = nil
 
     var accessibilityOpenHint: String {
         switch provider {
@@ -122,12 +124,20 @@ struct PetHoverPanelContent: Equatable, Sendable {
     let connectionFailed: Bool
     let petSourceText: String
     let hasPet: Bool
+    let selectedPet: PetPackage?
+    let availablePets: [PetPackage]
+    let assignments: [String: String]
+    let displayMode: PetDisplayMode
+    let navigationError: String?
 
     init(
         petName: String, statusText: String, projects: [PetTaskProjectPresentation],
         connections: [ProviderIntegrationHealth] = [], installingProvider: String? = nil,
         connectionMessage: String? = nil, connectionFailed: Bool = false,
-        petSourceText: String = "Following your Codex pet", hasPet: Bool = true
+        petSourceText: String = "Following your Codex pet", hasPet: Bool = true,
+        selectedPet: PetPackage? = nil, availablePets: [PetPackage] = [],
+        assignments: [String: String] = [:], displayMode: PetDisplayMode = .companion,
+        navigationError: String? = nil
     ) {
         self.petName = petName
         self.statusText = statusText
@@ -138,6 +148,11 @@ struct PetHoverPanelContent: Equatable, Sendable {
         self.connectionFailed = connectionFailed
         self.petSourceText = petSourceText
         self.hasPet = hasPet
+        self.selectedPet = selectedPet
+        self.availablePets = availablePets
+        self.assignments = assignments
+        self.displayMode = displayMode
+        self.navigationError = navigationError
     }
 
     var needsAttention: Bool {
@@ -184,18 +199,9 @@ struct PetHoverPanelContent: Equatable, Sendable {
     }
 
     var preferredHeight: CGFloat {
-        guard taskCount > 0 else {
-            return 252
-        }
-
-        let visibleTaskCount = min(taskCount, 6)
-        let visibleProjectCount = min(attentionProjects.count + remainingProjects.count, 4)
-        let panelChrome: CGFloat = 134 + (needsAttention ? 48 : 0)
-        let projectHeadings = CGFloat(visibleProjectCount) * 18
-        let rows = CGFloat(visibleTaskCount) * 54
-        let rowSpacing = CGFloat(max(0, visibleTaskCount - visibleProjectCount)) * 2
-        let projectSpacing = CGFloat(max(0, visibleProjectCount - 1)) * 10
-        return min(440, panelChrome + projectHeadings + rows + rowSpacing + projectSpacing)
+        let activeCount = projects.flatMap(\.tasks).filter { $0.state.isActive }.count
+        guard activeCount > 0 else { return taskCount > 0 ? 440 : 340 }
+        return min(640, 242 + CGFloat(min(activeCount, 4)) * 116)
     }
 }
 
@@ -218,7 +224,9 @@ enum PetTaskPresentationAdapter {
                         provider: provider(task.provider),
                         state: state(task.status),
                         deepLinkURL: task.deepLinkURL,
-                        projectURL: projectFallbackURL
+                        projectURL: projectFallbackURL,
+                        projectName: group.project.name,
+                        updatedAt: task.updatedAt
                     )
                 }
             )

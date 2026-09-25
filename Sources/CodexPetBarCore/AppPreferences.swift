@@ -1,17 +1,34 @@
 import Foundation
 
+public enum PetDisplayMode: String, CaseIterable, Sendable {
+    case companion
+    case taskPets
+}
+
 public final class AppPreferences {
     private enum Key {
         static let followCodexPet = "followCodexPet"
         static let selectedPetIDOverride = "selectedPetIDOverride"
         static let petSize = "petSize"
         static let manualAnimationState = "manualAnimationState"
+        static let displayMode = "displayMode"
+        static let taskPetAssignments = "taskPetAssignments"
     }
 
     private let defaults: UserDefaults
 
     public init(defaults: UserDefaults = .standard) {
         self.defaults = defaults
+    }
+
+    public var displayMode: PetDisplayMode {
+        get { PetDisplayMode(rawValue: defaults.string(forKey: Key.displayMode) ?? "") ?? .companion }
+        set { defaults.set(newValue.rawValue, forKey: Key.displayMode) }
+    }
+
+    public var taskPetAssignments: [String: String] {
+        get { defaults.dictionary(forKey: Key.taskPetAssignments) as? [String: String] ?? [:] }
+        set { defaults.set(newValue, forKey: Key.taskPetAssignments) }
     }
 
     public var followCodexPet: Bool {

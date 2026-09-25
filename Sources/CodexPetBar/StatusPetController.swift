@@ -6,6 +6,9 @@ import Darwin
 final class StatusPetController: NSObject {
     private let statusItem: NSStatusItem
     private let hoverPanelController = PetHoverPanelController()
+    private var taskStripView: PetTaskStripView?
+    private var taskPetAssignments: [String: String] = [:]
+    private var navigationError: String?
     private let loginItemController = LoginItemController()
     private let petLibrary: PetLibrary
     private let preferences: AppPreferences
@@ -98,6 +101,7 @@ final class StatusPetController: NSObject {
             petsDirectory: codexHome.appendingPathComponent("pets", isDirectory: true)
         )
         self.preferences = preferences
+        self.taskPetAssignments = preferences.taskPetAssignments
         self.codexStateURL = codexHome.appendingPathComponent(".codex-global-state.json")
         self.petEventsURL = codexHome.appendingPathComponent("pet-events.jsonl")
         self.sessionIndexURL = codexHome.appendingPathComponent("session_index.jsonl")
@@ -145,6 +149,10 @@ final class StatusPetController: NSObject {
         loginItemController.promptOnFirstLaunch()
     }
 
+    func presentTaskPanel() {
+        hoverPanelController.presentPinned()
+    }
+
     private func configureButton() {
         guard let button = statusItem.button else {
             return
@@ -171,6 +179,16 @@ final class StatusPetController: NSObject {
             },
             onConnect: { [weak self] provider in
                 self?.installHooks(provider: provider.rawValue, inlineResult: true)
+            },
+            onChangeMode: { [weak self] mode in
+                self?.setDisplayMode(mode)
+            },
+            onAssignPet: { [weak self] taskID, petID in
+                guard let self, self.pets.contains(where: { $0.id == petID }) else { return }
+                self.taskPetAssignments[taskID] = petID
+                self.preferences.taskPetAssignments = self.taskPetAssignments
+                self.refreshTaskCompanions()
+                self.hoverPanelController.contentDidChange()
             }
         )
         updateStatusDescription()
@@ -653,6 +671,7 @@ final class StatusPetController: NSObject {
                 events: cachedPetEvents ?? []
             )
         )
+        refreshTaskCompanions()
         let attentionPresentationChanged = synchronizeAttentionPresentation()
 
         let didChange = previousActivity != currentActivity
@@ -761,7 +780,12 @@ final class StatusPetController: NSObject {
             connectionMessage: connectionResultMessage,
             connectionFailed: connectionResultFailed,
             petSourceText: preferences.followCodexPet ? "Following your Codex pet" : "Using your chosen menu-bar pet",
-            hasPet: selectedPet != nil
+            hasPet: selectedPet != nil,
+            selectedPet: selectedPet,
+            availablePets: pets,
+            assignments: taskPetAssignments,
+            displayMode: preferences.displayMode,
+            navigationError: navigationError
         )
     }
 
@@ -774,67 +798,74 @@ final class StatusPetController: NSObject {
     }
 
     private func openPresentedTask(_ task: PetTaskPresentation) {
-        if let deepLinkURL = task.deepLinkURL {
-            NSWorkspace.shared.open(deepLinkURL)
-            return
-        }
-
-        switch task.provider {
-        case .cursor:
-            guard let projectURL = task.projectURL else {
-                NSSound.beep()
-                return
-            }
-            openProjectInCursor(projectURL)
-        case .claude:
-            guard let projectURL = task.projectURL else {
-                NSSound.beep()
-                return
-            }
-            let resumableSessionID = task.navigationSourceID ?? task.sourceID
-            if let deepLink = claudeCodeDeepLink(projectURL: projectURL, sourceID: resumableSessionID) {
-                NSWorkspace.shared.open(deepLink)
+        navigationError = nil
+        PetTaskNavigator.open(task) { [weak self] error in
+            guard let self else { return }
+            if let error {
+                self.navigationError = error
+                self.hoverPanelController.presentPinned()
             } else {
-                NSWorkspace.shared.open(projectURL)
+                self.hoverPanelController.dismiss()
             }
-        case .codex, .other:
-            guard let projectURL = task.projectURL else {
-                NSSound.beep()
-                return
-            }
-            NSWorkspace.shared.open(projectURL)
         }
     }
 
-    private func openProjectInCursor(_ projectURL: URL) {
-        let cursorBundleID = "com.todesktop.230313mzl4w4u92"
-        guard let cursorURL = NSWorkspace.shared.urlForApplication(withBundleIdentifier: cursorBundleID) else {
-            NSWorkspace.shared.open(projectURL)
+    private func setDisplayMode(_ mode: PetDisplayMode) {
+        preferences.displayMode = mode
+        refreshTaskCompanions()
+        resetAnimationRuntime()
+        renderCurrentFrame(deltaTime: 0)
+        updateTimerCadenceIfNeeded()
+        hoverPanelController.contentDidChange()
+    }
+
+    private func refreshTaskCompanions() {
+        let active = cachedTaskSummaries.filter { $0.status == .waiting || $0.status == .failed || $0.status == .running }
+        // Assign active work first so archived tasks do not consume distinct pets.
+        var assignments = PetTaskCompanions.assignments(tasks: active, pets: pets, previous: taskPetAssignments)
+        assignments = PetTaskCompanions.assignments(tasks: cachedTaskSummaries, pets: pets, previous: assignments)
+        if assignments.count > 500 {
+            let recentIDs = cachedTaskSummaries.sorted { $0.updatedAt > $1.updatedAt }.prefix(500).map(\.id)
+            let retained = Set(recentIDs)
+            let remaining = assignments.keys.filter { !retained.contains($0) }.sorted().prefix(max(0, 500 - retained.count))
+            let keep = retained.union(remaining)
+            assignments = assignments.filter { keep.contains($0.key) }
+        }
+        if assignments != taskPetAssignments {
+            taskPetAssignments = assignments
+            preferences.taskPetAssignments = assignments
+        }
+        let strip = PetTaskCompanions.strip(tasks: cachedTaskSummaries)
+        guard preferences.displayMode == .taskPets, !strip.visibleTasks.isEmpty,
+              let button = statusItem.button else {
+            if let taskStripView {
+                taskStripView.removeFromSuperview()
+                self.taskStripView = nil
+                statusItem.button?.setAccessibilityChildren(nil)
+                lastRenderKey = nil
+            }
             return
         }
-
-        NSWorkspace.shared.open(
-            [projectURL],
-            withApplicationAt: cursorURL,
-            configuration: NSWorkspace.OpenConfiguration()
-        )
-    }
-
-    private func claudeCodeDeepLink(projectURL: URL, sourceID: String) -> URL? {
-        var components = URLComponents()
-        components.scheme = "claude-cli"
-        components.host = "open"
-        components.queryItems = [
-            URLQueryItem(name: "cwd", value: projectURL.path),
-            URLQueryItem(name: "q", value: "/resume \(sourceID)"),
-        ]
-        guard
-            let url = components.url,
-            NSWorkspace.shared.urlForApplication(toOpen: url) != nil
-        else {
-            return nil
+        let view = taskStripView ?? PetTaskStripView(frame: button.bounds)
+        let presentations = PetTaskPresentationAdapter.taskGroups(PetTaskSummaryGrouping.groups(tasks: strip.visibleTasks)).flatMap(\.tasks)
+        let ordered = strip.visibleTasks.compactMap { summary in presentations.first { $0.id == summary.id } }
+        var companions: [String: PetPackage] = [:]
+        for task in ordered {
+            companions[task.id] = pets.first { $0.id == assignments[task.id] } ?? selectedPet
         }
-        return url
+        view.update(tasks: ordered, petsByTask: companions,
+            overflowCount: strip.overflowCount, attentionOverflowCount: strip.attentionOverflowCount,
+            onOpenTask: { [weak self] task in self?.openPresentedTask(task) },
+            onOpenOverview: { [weak self] in self?.hoverPanelController.togglePinned() })
+        applyStatusLength(Double(view.preferredWidth))
+        view.frame = button.bounds
+        view.autoresizingMask = [.width, .height]
+        if view.superview == nil { button.addSubview(view) }
+        view.setAccessibilityRole(.group)
+        view.setAccessibilityElement(true)
+        button.setAccessibilityChildren([view])
+        taskStripView = view
+        button.image = nil
     }
 
     private func setState(_ state: PetAnimationState) {
@@ -845,6 +876,12 @@ final class StatusPetController: NSObject {
     }
 
     private func renderCurrentFrame(deltaTime: Double? = nil) {
+        if let taskStripView {
+            applyStatusLength(Double(taskStripView.preferredWidth))
+            statusItem.button?.image = nil
+            updateStatusDescription()
+            return
+        }
         let deltaTime = deltaTime ?? frameDeltaTime()
         let renderState: RenderState
         if preferences.manualAnimationState != nil {
@@ -1211,6 +1248,7 @@ final class StatusPetController: NSObject {
             codexSelectedPetID: codexSelectedPetID
         )
         loadSelectedPet()
+        refreshTaskCompanions()
         hoverPanelController.contentDidChange()
         if playReaction {
             triggerReaction(.waving)
@@ -1238,6 +1276,7 @@ final class StatusPetController: NSObject {
 
         selectedPet = resolvedPet
         loadSelectedPet()
+        refreshTaskCompanions()
         hoverPanelController.contentDidChange()
         triggerReaction(.waving)
         renderCurrentFrame()
@@ -2206,6 +2245,7 @@ final class StatusPetController: NSObject {
     }
 
     private func desiredTimerInterval() -> TimeInterval {
+        if taskStripView != nil { return RuntimeCadence.maintenanceInterval }
         if reduceMotion {
             return attentionPresentations.activeScope == nil && !isShowingCompletion
                 ? RuntimeCadence.maintenanceInterval

@@ -2,7 +2,7 @@
 
 CodexPetBar is distributed as a Homebrew cask through `andytyler/tap`. It installs a native macOS menu bar app and helper commands packaged inside `CodexPetBar.app`. It requires an Apple-Silicon Mac running macOS 14 or later.
 
-Public downloads and Homebrew currently provide v0.1.2. The v0.2.0 source and provider commands described below are pending Apple notarization; the tap must remain on the existing release until a notarized v0.2.0 artifact is ready.
+Public downloads and Homebrew currently provide v0.1.2. The v0.3.0 source and provider commands described below are pending Apple notarization; the tap must remain on the existing release until a notarized v0.3.0 artifact is ready.
 
 ## User Install
 
@@ -19,7 +19,7 @@ codex-pet-bar --add-codex-hooks
 
 Open Codex and approve newly installed hooks there. Hook-driven reactions begin when Codex approves and runs those hooks.
 
-## v0.2.0 Helper Commands
+## v0.3.0 Helper Commands
 
 ```bash
 codex-pet-bar
@@ -56,8 +56,8 @@ Enter an app-specific password when prompted. A zipped `.app` requires a **Devel
 Prepare and inspect a release without publishing:
 
 ```bash
-./script/publish_homebrew.sh --dry-run --version 0.2.0 \
-  --output-dir /private/tmp/codexpet-release-0.2.0 \
+./script/publish_homebrew.sh --dry-run --version 0.3.0 \
+  --output-dir /private/tmp/codexpet-release-0.3.0 \
   --sign "Developer ID Application: YOUR NAME (TEAMID)" \
   --notarize
 ```
@@ -67,7 +67,7 @@ This still signs, submits to Apple and staples the result. It creates the zip, s
 Publish the reviewed version:
 
 ```bash
-./script/publish_homebrew.sh --version 0.2.0 \
+./script/publish_homebrew.sh --version 0.3.0 \
   --sign "Developer ID Application: YOUR NAME (TEAMID)" \
   --notarize
 ```
