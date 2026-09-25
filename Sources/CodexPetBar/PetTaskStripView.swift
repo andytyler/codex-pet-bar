@@ -370,7 +370,8 @@ private final class PetTaskStripButton: NSButton {
                 let height = min(22, bounds.height)
                 image.draw(in: NSRect(x: (bounds.width - 32) / 2 - 1, y: (bounds.height - height) / 2,
                                       width: 32, height: height),
-                           from: .zero, operation: .sourceOver, fraction: 1)
+                           from: .zero, operation: .sourceOver, fraction: 1,
+                           respectFlipped: true, hints: nil)
             } else {
                 drawSymbol("pawprint.fill", size: 14, color: .secondaryLabelColor)
             }
