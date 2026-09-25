@@ -26,4 +26,4 @@ bun run deploy
 
 The native application continues to be distributed through GitHub Releases and Homebrew. The downloadable release is v0.1.2; the interactive site demo is labelled as a v0.2 preview.
 
-The initial release was uploaded through the Cloudflare dashboard. The existing local Wrangler login belongs to another account: sign into the account above before deploying from the CLI. Alternatively, use Workers → codex-pet-bar → Deployments → Upload new version to upload `web/build`.
+The initial release was published with Wrangler. Use a separate `XDG_CONFIG_HOME` for this Cloudflare account if your default Wrangler login belongs to another account. Apply the same `XDG_CONFIG_HOME` to both login and deploy commands. Deployment permissions must include `workers_scripts:write`, `workers:write`, `workers_routes:write`, `zone:read`, `account:read`, and `user:read`. The account ID in `wrangler.jsonc` prevents deployment to a different account.
