@@ -12,7 +12,7 @@
 
 CodexPetBar puts an animated pet in your macOS menu bar. It can follow the pet selected in Codex, switch animations from local Codex activity, and load custom pets from `~/.codex/pets`.
 
-[Website](https://andytyler.github.io/codex-pet-bar/) · [Download the latest release](https://github.com/andytyler/codex-pet-bar/releases/latest)
+[Website](https://pet.ajt.dev/) · [Download the latest release](https://github.com/andytyler/codex-pet-bar/releases/latest)
 
 **Release status:** this branch contains v0.2.0, pending Apple notarization. Public downloads and Homebrew currently provide v0.1.2. The features documented below describe v0.2.0; build from source to try them now.
 

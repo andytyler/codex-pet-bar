@@ -1,0 +1,17 @@
+{
+  "$schema": "./node_modules/wrangler/config-schema.json",
+  "name": "codex-pet-bar",
+  "compatibility_date": "2026-09-25",
+  "assets": {
+    "directory": "./build"
+  },
+  "routes": [
+    {
+      "pattern": "pet.ajt.dev",
+      "custom_domain": true
+    }
+  ],
+  "workers_dev": false,
+  "preview_urls": false,
+  "account_id": "da6ee7275bc045f55d74ef45b2c13469"
+}
