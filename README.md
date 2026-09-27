@@ -66,7 +66,7 @@ CodexPetBar lives in the menu bar. Click your pet to see a compact list of tasks
 Choose a mode in **Settings → Menu bar**. One companion is the default:
 
 - **One companion** follows your selected Codex pet, with activity and provider signals. Hover for a quick look or click to keep the list open.
-- **Shared pets** puts up to four companions in one continuous area. Working pets run across the shared space; finished or idle pets stay standing. Movement pauses on hover, keyboard interaction, and with Reduce Motion enabled. Click a pet to return to its task, or the chevron / **+N** to open the task list. Codex child runs share their parent conversation’s pet. With no task history, a few pets from your existing library stand together.
+- **Shared pets** puts up to four companions in one continuous area. Working pets run across the shared space; finished or idle pets stay standing. Hover gently enlarges a pet without a surrounding box. An amber **!** marks a task needing input; a red **×** marks an error. Movement pauses on hover, keyboard interaction, and with Reduce Motion enabled. Click a pet to see its task in the panel, then click the task row to return to work. The chevron / **+N** opens the full task list. Codex child runs share their parent conversation’s pet. With no task history, a few pets from your existing library stand together.
 
 Right-click a task row and choose **Choose pet** to assign a companion. Choices persist on this Mac. Pets come from your existing local library; tasks may share a pet when there are fewer pets than tasks.
 

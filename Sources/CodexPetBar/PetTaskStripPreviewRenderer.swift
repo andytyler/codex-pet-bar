@@ -7,18 +7,19 @@ import CodexPetBarCore
 /// The strip never joins a window, so its animation timer cannot start.
 @MainActor
 enum PetTaskStripPreviewRenderer {
-    static func render(to url: URL, dark: Bool = false, animated: Bool = false) throws {
+    static func render(to url: URL, dark: Bool = false, animated: Bool = false,
+                       attention: Bool = false, hovered: Bool = false) throws {
         let pets = PetLibrary(petsDirectory: CodexEnvironment.homeDirectory()
             .appendingPathComponent("pets", isDirectory: true)).loadPetsWithDiagnostics().pets
         guard !pets.isEmpty else { throw PreviewError.noPets }
 
         var tasks = [
-            task("approve-release", title: "Prepare the release", provider: .codex, state: .running),
-            task("review-settings", title: "Update the settings", provider: .claude, state: .running),
+            task("approve-release", title: "Prepare the release", provider: .codex, state: attention ? .waiting : .running),
+            task("review-settings", title: "Update the settings", provider: .claude, state: attention ? .failed : .running),
             task("keyboard-check", title: "Check keyboard navigation", provider: .cursor, state: .running),
             task("task-sidebar", title: "Build the task sidebar", provider: .codex, state: .running),
         ]
-        let preferred = ["boo", "clippy", "gandalf", "grumble"].compactMap { id in pets.first { $0.id == id } }
+        let preferred = ["boo", "clippy", "mini-gandalf-the-grey", "grumble"].compactMap { id in pets.first { $0.id == id } }
         let previewPets = preferred.count == 4 ? preferred : pets
         let companions = Dictionary(uniqueKeysWithValues: tasks.enumerated().map {
             ($0.element.id, previewPets[$0.offset % previewPets.count])
@@ -60,7 +61,7 @@ enum PetTaskStripPreviewRenderer {
                 throw PreviewError.inaccessibleButton("\(label): role is \(String(describing: button.accessibilityRole())).")
             }
             guard !label.isEmpty else { throw PreviewError.inaccessibleButton("A button has no accessible label.") }
-            guard button.isEnabled, button.acceptsFirstResponder else {
+            guard button.isEnabled, button.acceptsFirstResponder, button.acceptsFirstMouse(for: nil) else {
                 throw PreviewError.inaccessibleButton("\(label): enabled=\(button.isEnabled), focusable=\(button.acceptsFirstResponder).")
             }
             guard button.frame.width > 0, button.frame.height == 22 else {
@@ -72,6 +73,32 @@ enum PetTaskStripPreviewRenderer {
         }
         guard Set(openedTaskIDs) == Set(tasks.map(\.id)), openedTaskIDs.count == tasks.count, overviewOpens == 1 else {
             throw PreviewError.wrongActionRouting
+        }
+
+        // Verify the background owns a whole click and does not fire when a
+        // press is cancelled outside. Accessibility presses alone miss this path.
+        let point = strip.convert(NSPoint(x: 170, y: 11), to: nil)
+        guard strip.acceptsFirstMouse(for: nil),
+              let down = NSEvent.mouseEvent(with: .leftMouseDown, location: point, modifierFlags: [],
+                timestamp: 0, windowNumber: 0, context: nil, eventNumber: 0, clickCount: 1, pressure: 1),
+              let up = NSEvent.mouseEvent(with: .leftMouseUp, location: point, modifierFlags: [],
+                timestamp: 0.1, windowNumber: 0, context: nil, eventNumber: 1, clickCount: 1, pressure: 0),
+              let outside = NSEvent.mouseEvent(with: .leftMouseUp, location: NSPoint(x: -100, y: -100), modifierFlags: [],
+                timestamp: 0.1, windowNumber: 0, context: nil, eventNumber: 2, clickCount: 1, pressure: 0)
+        else { throw PreviewError.wrongActionRouting }
+        strip.mouseUp(with: up)
+        guard overviewOpens == 1 else { throw PreviewError.wrongActionRouting }
+        strip.mouseDown(with: down)
+        strip.mouseUp(with: up)
+        guard overviewOpens == 2 else { throw PreviewError.wrongActionRouting }
+        strip.mouseDown(with: down)
+        strip.mouseUp(with: outside)
+        guard overviewOpens == 2 else { throw PreviewError.wrongActionRouting }
+
+        if hovered, let event = NSEvent.enterExitEvent(with: .mouseEntered, location: .zero,
+            modifierFlags: [], timestamp: 0, windowNumber: 0, context: nil, eventNumber: 0,
+            trackingNumber: 0, userData: nil) {
+            buttons.first?.mouseEntered(with: event)
         }
 
         if animated {

@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.3.3 (pending notarization)
+
+- Make shared-pet clicks show the task panel before navigating, and keep background clicks responsive when Pet Bar is inactive.
+- Replace hover boxes with a small pet enlargement, and give each waiting or failed pet a clear attention badge.
+- Defer settings menu presentation until the initiating action returns, and make Escape dismissal reliable.
+
 ## 0.3.2 (pending notarization)
 
 - Replace fixed task-pet slots with optional Shared pets: one continuous menu-bar area where working companions roam and idle companions stand.

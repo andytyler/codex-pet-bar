@@ -10,6 +10,8 @@ final class StatusPetController: NSObject {
     private var taskStripView: PetTaskStripView?
     private var taskPetAssignments: [String: String] = [:]
     private var navigationError: String?
+    private var isSettingsMenuScheduled = false
+    private var isSettingsMenuOpen = false
     private let loginItemController = LoginItemController()
     private let petLibrary: PetLibrary
     private let preferences: AppPreferences
@@ -211,13 +213,28 @@ final class StatusPetController: NSObject {
     }
 
     @objc private func showMenu() {
+        guard !isSettingsMenuScheduled, !isSettingsMenuOpen else { return }
+        isSettingsMenuScheduled = true
+        // NSMenu starts a nested tracking loop. Let the initiating mouse or
+        // accessibility action return before entering that loop.
+        DispatchQueue.main.async { [weak self] in
+            guard let self else { return }
+            self.isSettingsMenuScheduled = false
+            self.presentSettingsMenu()
+        }
+    }
+
+    private func presentSettingsMenu() {
+        guard !isSettingsMenuOpen else { return }
+        isSettingsMenuOpen = true
         hoverPanelController.menuWillOpen()
         defer {
+            statusItem.menu = nil
+            isSettingsMenuOpen = false
             hoverPanelController.menuDidClose()
         }
         statusItem.menu = makeMenu()
         statusItem.button?.performClick(nil)
-        statusItem.menu = nil
     }
 
     private func startTimer() {
@@ -775,7 +792,14 @@ final class StatusPetController: NSObject {
         if taskSummariesDirty {
             refreshTaskSummariesInBackground()
         }
-        let groups = PetTaskSummaryGrouping.groups(tasks: presentedThreads)
+        var panelThreads = presentedThreads
+        if preferences.displayMode == .sharedPets {
+            let currentIDs = Set(panelThreads.map(\.id))
+            // A retained idle pet must still have a row when clicked, even if
+            // its original summary has fallen outside the current history scan.
+            panelThreads += sharedPetParticipants.filter { !currentIDs.contains($0.id) }
+        }
+        let groups = PetTaskSummaryGrouping.groups(tasks: panelThreads)
         return PetHoverPanelContent(
             petName: selectedPet?.displayName ?? "Codex Pet",
             statusText: taskStatusText,
@@ -880,7 +904,7 @@ final class StatusPetController: NSObject {
             overflowCount: strip.overflowCount, attentionOverflowCount: strip.attentionOverflowCount,
             onOpenTask: { [weak self] task in
                 if task.id.hasPrefix("pet-bar:idle:") { self?.hoverPanelController.togglePinned() }
-                else { self?.openPresentedTask(task) }
+                else { self?.hoverPanelController.presentTask(task) }
             },
             onOpenOverview: { [weak self] in self?.hoverPanelController.togglePinned() })
         applyStatusLength(Double(view.preferredWidth))
@@ -2230,7 +2254,7 @@ final class StatusPetController: NSObject {
 
         let help = taskStripView == nil
             ? "Click for tasks · Right-click for settings"
-            : "Click a pet to open its task. Use the chevron for all tasks."
+            : "Click a pet to see its task. Use the chevron for all tasks."
         button.toolTip = "\(description)\n\(help)"
         button.setAccessibilityHelp(help)
         button.setAccessibilityLabel(taskStripView == nil ? petName : "Task companions")

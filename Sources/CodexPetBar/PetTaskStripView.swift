@@ -16,6 +16,7 @@ final class PetTaskStripView: NSView {
     private var statesByTask: [String: PetTaskStatePresentation] = [:]
     private var playfieldTracking: NSTrackingArea?
     private var isPointerInside = false
+    private var isPressingBackground = false
     private var lastTick: TimeInterval?
     private var onOpenOverview: (() -> Void)?
     private var observing = false
@@ -72,9 +73,9 @@ final class PetTaskStripView: NSView {
             let stateLabel = task.state.isActive ? task.state.displayName : "Idle"
             let isUnassigned = task.id.hasPrefix("pet-bar:idle:")
             button.toolTip = isUnassigned ? "\(task.title) · Idle\nOpen task list"
-                : "\(pet?.displayName ?? "Task companion")\n\(task.title)\n\(stateLabel)"
+                : "\(pet?.displayName ?? "Task companion")\n\(task.title)\n\(stateLabel) · Click to view task"
             button.setAccessibilityLabel("\(pet?.displayName ?? "Companion"), \(task.title), \(stateLabel)")
-            button.setAccessibilityHelp(isUnassigned ? "Opens the task list" : task.accessibilityOpenHint)
+            button.setAccessibilityHelp(isUnassigned ? "Opens the task list" : "Shows this task in Pet Bar")
             button.onPress = { onOpenTask(task) }
             button.onSecondaryPress = onOpenOverview
             if button.superview !== self { addSubview(button) }
@@ -156,7 +157,16 @@ final class PetTaskStripView: NSView {
 
     override func mouseEntered(with event: NSEvent) { isPointerInside = true; updateAnimation() }
     override func mouseExited(with event: NSEvent) { isPointerInside = false; updateAnimation() }
-    override func mouseUp(with event: NSEvent) { onOpenOverview?() }
+    override func acceptsFirstMouse(for event: NSEvent?) -> Bool { true }
+
+    // Own the complete background click. Forwarding mouseDown to the enclosing
+    // status button lets its tracking loop consume mouseUp before we receive it.
+    override func mouseDown(with event: NSEvent) { isPressingBackground = true }
+    override func mouseUp(with event: NSEvent) {
+        defer { isPressingBackground = false }
+        guard isPressingBackground, bounds.contains(convert(event.locationInWindow, from: nil)) else { return }
+        onOpenOverview?()
+    }
     override func rightMouseDown(with event: NSEvent) { onOpenOverview?() }
 
     /// The preview advances this same production renderer without a live timer.
@@ -191,7 +201,7 @@ final class PetTaskStripView: NSView {
         setAccessibilityElement(true)
         setAccessibilityRole(.group)
         setAccessibilityLabel("Shared pets")
-        setAccessibilityHelp("Pets share one space. Working pets move; idle pets stand. Choose a pet to open its task, or open the task list.")
+        setAccessibilityHelp("Pets share one space. Working pets move; idle pets stand. Choose a pet to view its task, or open the task list.")
         overviewButton.displayMode = .overview
         overviewButton.toolTip = "Show all tasks and Pet Bar controls"
         addSubview(overviewButton)
@@ -358,6 +368,7 @@ private final class PetTaskStripButton: NSButton {
     }
 
     override var acceptsFirstResponder: Bool { true }
+    override func acceptsFirstMouse(for event: NSEvent?) -> Bool { true }
     override var focusRingMaskBounds: NSRect { bounds.insetBy(dx: 2, dy: 1) }
 
     override init(frame frameRect: NSRect) {
@@ -389,25 +400,24 @@ private final class PetTaskStripButton: NSButton {
     }
 
     override func draw(_ dirtyRect: NSRect) {
-        if hovered || isHighlighted {
-            NSColor.labelColor.withAlphaComponent(isHighlighted ? 0.14 : 0.07).setFill()
-            NSBezierPath(roundedRect: bounds.insetBy(dx: 1, dy: 1), xRadius: 5, yRadius: 5).fill()
-        }
         switch displayMode {
         case let .pet(state):
             if !spriteFrames.isEmpty {
                 let image = spriteFrames[min(frameIndex, spriteFrames.count - 1)]
-                let height = min(22, bounds.height)
-                image.draw(in: NSRect(x: (bounds.width - 32) / 2 - 1, y: (bounds.height - height) / 2,
-                                      width: 32, height: height),
+                // Leave room at rest so the hover lift fits inside the menu bar.
+                // Only the pet grows; there is no tile or background highlight.
+                let scale: CGFloat = isHighlighted ? 0.94 : hovered ? 1 : 0.88
+                let height = min(22, bounds.height) * scale
+                let width = 32 * scale
+                image.draw(in: NSRect(x: (bounds.width - width) / 2 - 1, y: 0.5,
+                                      width: width, height: height),
                            from: .zero, operation: .sourceOver, fraction: 1,
                            respectFlipped: true, hints: nil)
             } else {
                 drawSymbol("pawprint.fill", size: 14, color: .secondaryLabelColor)
             }
             if state == .waiting || state == .failed {
-                (state == .failed ? NSColor.systemRed : .systemOrange).setFill()
-                NSBezierPath(ovalIn: NSRect(x: bounds.maxX - 5, y: 3, width: 3, height: 3)).fill()
+                drawAttentionBadge(failed: state == .failed)
             }
         case let .overflow(count, needsAttention):
             let label = "+\(count)" as NSString
@@ -463,6 +473,23 @@ private final class PetTaskStripButton: NSButton {
         symbol.draw(in: NSRect(x: (bounds.width - imageSize.width) / 2,
                               y: (bounds.height - imageSize.height) / 2,
                               width: imageSize.width, height: imageSize.height))
+    }
+
+    private func drawAttentionBadge(failed: Bool) {
+        let badge = NSRect(x: bounds.maxX - 10, y: bounds.maxY - 10, width: 9, height: 9)
+        let outline = NSBezierPath(ovalIn: badge.insetBy(dx: -0.6, dy: -0.6))
+        NSColor.windowBackgroundColor.setFill()
+        outline.fill()
+        (failed ? NSColor.systemRed : NSColor.systemOrange).setFill()
+        NSBezierPath(ovalIn: badge).fill()
+        let mark = (failed ? "×" : "!") as NSString
+        let attributes: [NSAttributedString.Key: Any] = [
+            .font: NSFont.systemFont(ofSize: failed ? 8 : 7, weight: .heavy),
+            .foregroundColor: failed ? NSColor.white : NSColor.black,
+        ]
+        let size = mark.size(withAttributes: attributes)
+        mark.draw(at: NSPoint(x: badge.midX - size.width / 2,
+                             y: badge.midY - size.height / 2), withAttributes: attributes)
     }
 
     @objc private func pressed() { onPress?() }

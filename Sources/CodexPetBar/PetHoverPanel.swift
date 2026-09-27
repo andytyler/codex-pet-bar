@@ -32,6 +32,8 @@ final class PetHoverPanelController: NSObject {
     private var isPinned = false
     private var showsConnections = false
     private var showsRecent = false
+    private var focusedTaskID: String?
+    private var taskFocusRequest = 0
     private var settingsHandler: (@MainActor () -> Void)?
     private var connectionHandler: (@MainActor (PetProvider) -> Void)?
     private var modeHandler: (@MainActor (PetDisplayMode) -> Void)?
@@ -60,6 +62,7 @@ final class PetHoverPanelController: NSObject {
         panel.isReleasedWhenClosed = false
         panel.setAccessibilitySubrole(.dialog)
         panel.setAccessibilityLabel("Pet task summaries")
+        panel.onCancel = { [weak self] in self?.dismiss() }
         return panel
     }()
 
@@ -124,10 +127,18 @@ final class PetHoverPanelController: NSObject {
     }
 
     func togglePinned() {
+        focusedTaskID = nil
         if panel.isVisible && isPinned {
             dismiss()
             return
         }
+        presentPinned()
+    }
+
+    func presentTask(_ task: PetTaskPresentation) {
+        focusedTaskID = task.id
+        taskFocusRequest &+= 1
+        if !task.state.isActive { showsRecent = true }
         presentPinned()
     }
 
@@ -162,7 +173,7 @@ final class PetHoverPanelController: NSObject {
         ) { [weak self] event in
             guard let self else { return event }
             if event.type == .keyDown {
-                if event.keyCode == 53 && self.panel.isKeyWindow {
+                if event.keyCode == 53 && self.panel.isVisible {
                     self.dismiss()
                     return nil
                 }
@@ -343,6 +354,8 @@ final class PetHoverPanelController: NSObject {
             },
             showsConnections: showsConnections,
             showsRecent: showsRecent,
+            focusedTaskID: focusedTaskID,
+            taskFocusRequest: taskFocusRequest,
             onToggleRecent: { [weak self] in
                 guard let self else { return }
                 self.showsRecent.toggle()
@@ -502,8 +515,19 @@ final class PetHoverPanelController: NSObject {
 }
 
 private final class PetTaskPanel: NSPanel {
+    var onCancel: (() -> Void)?
+
     override var canBecomeKey: Bool {
         true
+    }
+
+    override func cancelOperation(_ sender: Any?) {
+        onCancel?()
+    }
+
+    override func keyDown(with event: NSEvent) {
+        if event.keyCode == 53 { onCancel?() }
+        else { super.keyDown(with: event) }
     }
 }
 
@@ -575,6 +599,8 @@ struct PetHoverPanelView: View {
     let onOpenTask: (PetTaskPresentation) -> Void
     var showsConnections = false
     var showsRecent = false
+    var focusedTaskID: String?
+    var taskFocusRequest = 0
     var onToggleRecent: () -> Void = {}
     var onToggleConnections: () -> Void = {}
     var onOpenSettings: () -> Void = {}
@@ -628,17 +654,22 @@ struct PetHoverPanelView: View {
                     .fixedSize(horizontal: false, vertical: true)
                     .padding(8)
             }
-            ScrollView {
-                VStack(alignment: .leading, spacing: 0) {
-                    if active.isEmpty { quietState }
-                    ForEach(active) { task in row(task) }
-                    if showsRecent {
-                        if !active.isEmpty { Divider().padding(.horizontal, 8).padding(.vertical, 4) }
-                        ForEach(recent) { task in row(task) }
+            ScrollViewReader { proxy in
+                ScrollView {
+                    VStack(alignment: .leading, spacing: 0) {
+                        if active.isEmpty { quietState }
+                        ForEach(active) { task in row(task).id(task.id) }
+                        if showsRecent {
+                            if !active.isEmpty { Divider().padding(.horizontal, 8).padding(.vertical, 4) }
+                            ForEach(recent) { task in row(task).id(task.id) }
+                        }
                     }
                 }
+                .scrollIndicators(.automatic)
+                .onChange(of: taskFocusRequest, initial: true) { _, _ in
+                    if let focusedTaskID { proxy.scrollTo(focusedTaskID, anchor: .top) }
+                }
             }
-            .scrollIndicators(.automatic)
             if !recent.isEmpty || content.hasConnectionIssue || !content.hasReadyConnection || showsConnections {
                 Divider().padding(.horizontal, 8).padding(.top, 6)
                 HStack(spacing: 12) {
