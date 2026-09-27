@@ -2,7 +2,8 @@ import Foundation
 
 public enum PetDisplayMode: String, CaseIterable, Sendable {
     case companion
-    case taskPets
+    // Retain the persisted value from the earlier per-task mode.
+    case sharedPets = "taskPets"
 }
 
 public final class AppPreferences {

@@ -4,7 +4,7 @@ import Testing
 
 @Suite("Task pet preferences")
 struct TaskPetPreferencesTests {
-    @Test("Existing installs keep one companion until they choose task pets")
+    @Test("Existing installs keep one companion until they choose shared pets")
     func defaultsAndPersistence() throws {
         let name = "dev.ajt.PetBarTests.\(UUID().uuidString)"
         let defaults = try #require(UserDefaults(suiteName: name))
@@ -12,11 +12,13 @@ struct TaskPetPreferencesTests {
         let preferences = AppPreferences(defaults: defaults)
         #expect(preferences.displayMode == .companion)
         #expect(preferences.taskPetAssignments.isEmpty)
-        preferences.displayMode = .taskPets
+        preferences.displayMode = .sharedPets
         preferences.taskPetAssignments = ["codex:one": "boo", "claude:one": "grumble"]
         let reloaded = AppPreferences(defaults: try #require(UserDefaults(suiteName: name)))
-        #expect(reloaded.displayMode == .taskPets)
+        #expect(reloaded.displayMode == .sharedPets)
         #expect(reloaded.taskPetAssignments == ["codex:one": "boo", "claude:one": "grumble"])
+        defaults.set("taskPets", forKey: "displayMode")
+        #expect(preferences.displayMode == .sharedPets)
         defaults.set("unknown-mode", forKey: "displayMode")
         #expect(preferences.displayMode == .companion)
     }

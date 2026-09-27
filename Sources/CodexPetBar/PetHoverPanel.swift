@@ -243,7 +243,7 @@ final class PetHoverPanelController: NSObject {
 
     private func scheduleShow() {
         guard !isMenuOpen, !panel.isVisible, showWorkItem == nil,
-              contentProvider?().displayMode != .taskPets else {
+              contentProvider?().displayMode != .sharedPets else {
             return
         }
 
@@ -296,7 +296,7 @@ final class PetHoverPanelController: NSObject {
 
     private func showIfEligible() {
         guard !isMenuOpen, isPointerOverStatusItem,
-              contentProvider?().displayMode != .taskPets else {
+              contentProvider?().displayMode != .sharedPets else {
             return
         }
 
@@ -763,7 +763,7 @@ enum PetHoverPanelPreviewRenderer {
             connections: PetProvider.allCases.map {
                 ProviderIntegrationHealth(provider: $0, state: empty ? .notInstalled : .connected)
             },
-            selectedPet: selected, availablePets: pets, assignments: assignments, displayMode: .taskPets
+            selectedPet: selected, availablePets: pets, assignments: assignments, displayMode: .sharedPets
         )
         let height = content.preferredHeight + (connections ? ProviderConnectionsView.estimatedHeight(resultMessage: nil) + 38 : 0)
         let view = PetHoverPanelView(content: content, height: height, onOpenTask: { _ in }, showsConnections: connections)

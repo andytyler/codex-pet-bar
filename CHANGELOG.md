@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.3.2 (pending notarization)
+
+- Replace fixed task-pet slots with optional Shared pets: one continuous menu-bar area where working companions roam and idle companions stand.
+- Keep finished companions visible, pause motion for interaction and Reduce Motion, and retain the single-companion default.
+- Preserve earlier mode preferences and per-conversation pet assignments.
+
 ## 0.3.1 (pending notarization)
 
 - Replace the task board with a compact native list: click any row to return to work, with recent tasks hidden until requested.

@@ -1,25 +1,28 @@
 import AppKit
 import CodexPetBarCore
 
-/// Several task companions inside one status item, with one route to the full list.
+/// One shared playfield: working pets roam, idle pets stay where they stopped.
 @MainActor
 final class PetTaskStripView: NSView {
-    private static let cellWidth: CGFloat = 40
-    private static let overviewWidth: CGFloat = 18
-    private static let overflowWidth: CGFloat = 30
+    private static let playfieldWidth: CGFloat = 176
+    private static let petWidth: CGFloat = 32
+    private static let overviewWidth: CGFloat = 26
     private var taskButtons: [PetTaskStripButton] = []
-    private let overflowButton = PetTaskStripButton(frame: .zero)
     private let overviewButton = PetTaskStripButton(frame: .zero)
     private var cachedSheets: [SheetKey: PreparedSheet] = [:]
     private var animationTimer: Timer?
-    private var animationStep = 0
+    private var playfield = PetSharedPlayfield()
+    private var petsByTask: [String: PetPackage] = [:]
+    private var statesByTask: [String: PetTaskStatePresentation] = [:]
+    private var playfieldTracking: NSTrackingArea?
+    private var isPointerInside = false
+    private var lastTick: TimeInterval?
+    private var onOpenOverview: (() -> Void)?
     private var observing = false
     private var screenSleeping = false
-    private var hasOverflow = false
 
     var preferredWidth: CGFloat {
-        CGFloat(taskButtons.count) * Self.cellWidth + Self.overviewWidth
-            + (hasOverflow ? Self.overflowWidth : 0)
+        Self.playfieldWidth + Self.overviewWidth
     }
 
     override var intrinsicContentSize: NSSize {
@@ -49,33 +52,31 @@ final class PetTaskStripView: NSView {
         onOpenTask: @escaping (PetTaskPresentation) -> Void,
         onOpenOverview: @escaping () -> Void
     ) {
+        self.onOpenOverview = onOpenOverview
+        self.petsByTask = petsByTask
         var seen = Set<String>()
         let visibleTasks = Array(tasks.filter { seen.insert($0.id).inserted }.prefix(4))
+        statesByTask = Dictionary(uniqueKeysWithValues: visibleTasks.map { ($0.id, $0.state) })
         let oldButtons = Dictionary(uniqueKeysWithValues: taskButtons.map { ($0.taskID, $0) })
         var visibleSheetKeys = Set<SheetKey>()
         taskButtons = visibleTasks.map { task in
             let button = oldButtons[task.id] ?? PetTaskStripButton(frame: .zero)
             button.taskID = task.id
             let pet = petsByTask[task.id]
-            let frames: [NSImage]
             if let pet {
                 let key = SheetKey(pet: pet)
                 visibleSheetKeys.insert(key)
-                if cachedSheets[key] == nil {
-                    cachedSheets[key] = PreparedSheet(package: pet)
-                }
-                frames = cachedSheets[key]?.frames(for: task.state) ?? []
-            } else {
-                frames = []
+                if cachedSheets[key] == nil { cachedSheets[key] = PreparedSheet(package: pet) }
             }
-            button.spriteFrames = frames
             button.displayMode = .pet(task.state)
-            button.toolTip = "\(pet?.displayName ?? "Task companion")\n\(task.title)\n\(task.state.displayName)"
-            button.setAccessibilityLabel("\(pet?.displayName ?? "Companion"), \(task.title), \(task.state.displayName)")
-            button.setAccessibilityHelp(task.accessibilityOpenHint)
+            let stateLabel = task.state.isActive ? task.state.displayName : "Idle"
+            let isUnassigned = task.id.hasPrefix("pet-bar:idle:")
+            button.toolTip = isUnassigned ? "\(task.title) · Idle\nOpen task list"
+                : "\(pet?.displayName ?? "Task companion")\n\(task.title)\n\(stateLabel)"
+            button.setAccessibilityLabel("\(pet?.displayName ?? "Companion"), \(task.title), \(stateLabel)")
+            button.setAccessibilityHelp(isUnassigned ? "Opens the task list" : task.accessibilityOpenHint)
             button.onPress = { onOpenTask(task) }
             button.onSecondaryPress = onOpenOverview
-            button.showFrame(NSWorkspace.shared.accessibilityDisplayShouldReduceMotion ? 0 : animationStep)
             if button.superview !== self { addSubview(button) }
             return button
         }
@@ -84,37 +85,29 @@ final class PetTaskStripView: NSView {
             button.removeFromSuperview()
         }
         cachedSheets = cachedSheets.filter { visibleSheetKeys.contains($0.key) }
+        playfield.update(participants: visibleTasks.map { .init(id: $0.id, moves: $0.state == .running) })
 
         let hiddenCount = max(0, overflowCount) + max(0, seen.count - visibleTasks.count)
-        hasOverflow = hiddenCount > 0
-        overflowButton.isHidden = !hasOverflow
-        overflowButton.displayMode = .overflow(hiddenCount, needsAttention: attentionOverflowCount > 0)
-        overflowButton.onPress = onOpenOverview
-        overflowButton.onSecondaryPress = onOpenOverview
         let attentionHint = attentionOverflowCount > 0 ? ", \(attentionOverflowCount) need attention" : ""
-        overflowButton.toolTip = "\(hiddenCount) more active tasks\(attentionHint)"
-        overflowButton.setAccessibilityLabel("Show \(hiddenCount) more active tasks\(attentionHint)")
+        overviewButton.displayMode = hiddenCount > 0
+            ? .overflow(hiddenCount, needsAttention: attentionOverflowCount > 0) : .overview
         overviewButton.onPress = onOpenOverview
         overviewButton.onSecondaryPress = onOpenOverview
-        overviewButton.setAccessibilityLabel("Show all tasks and Pet Bar controls")
-        setAccessibilityChildren(taskButtons + (hasOverflow ? [overflowButton] : []) + [overviewButton])
+        overviewButton.toolTip = hiddenCount > 0
+            ? "\(hiddenCount) more active tasks\(attentionHint)" : "Open task list"
+        overviewButton.setAccessibilityLabel(hiddenCount > 0
+            ? "Show all tasks, \(hiddenCount) more active tasks\(attentionHint)" : "Show all tasks and Pet Bar controls")
+        setAccessibilityChildren(taskButtons + [overviewButton])
         needsLayout = true
         invalidateIntrinsicContentSize()
+        applyMotion(deltaTime: 0)
         updateAnimation()
     }
 
     override func layout() {
         super.layout()
-        var x: CGFloat = 0
-        for button in taskButtons {
-            button.frame = NSRect(x: x, y: 0, width: Self.cellWidth, height: bounds.height)
-            x += Self.cellWidth
-        }
-        if hasOverflow {
-            overflowButton.frame = NSRect(x: x, y: 0, width: Self.overflowWidth, height: bounds.height)
-            x += Self.overflowWidth
-        }
-        overviewButton.frame = NSRect(x: x, y: 0, width: Self.overviewWidth, height: bounds.height)
+        applyMotion(deltaTime: 0)
+        overviewButton.frame = NSRect(x: Self.playfieldWidth, y: 0, width: Self.overviewWidth, height: bounds.height)
     }
 
     override func viewDidMoveToWindow() {
@@ -146,45 +139,87 @@ final class PetTaskStripView: NSView {
     }
 
     fileprivate func focusButton(after button: PetTaskStripButton, direction: Int) {
-        let buttons = taskButtons + (hasOverflow ? [overflowButton] : []) + [overviewButton]
+        let buttons = taskButtons + [overviewButton]
         guard let index = buttons.firstIndex(where: { $0 === button }), !buttons.isEmpty else { return }
         let next = (index + direction + buttons.count) % buttons.count
         window?.makeFirstResponder(buttons[next])
     }
 
+    override func updateTrackingAreas() {
+        if let playfieldTracking { removeTrackingArea(playfieldTracking) }
+        let area = NSTrackingArea(rect: .zero,
+            options: [.mouseEnteredAndExited, .activeAlways, .inVisibleRect], owner: self, userInfo: nil)
+        addTrackingArea(area)
+        playfieldTracking = area
+        super.updateTrackingAreas()
+    }
+
+    override func mouseEntered(with event: NSEvent) { isPointerInside = true; updateAnimation() }
+    override func mouseExited(with event: NSEvent) { isPointerInside = false; updateAnimation() }
+    override func mouseUp(with event: NSEvent) { onOpenOverview?() }
+    override func rightMouseDown(with event: NSEvent) { onOpenOverview?() }
+
+    /// The preview advances this same production renderer without a live timer.
+    func advancePreview(deltaTime: Double) { applyMotion(deltaTime: deltaTime) }
+
+    private func applyMotion(deltaTime: Double) {
+        let frames = playfield.step(deltaTime: deltaTime,
+            width: Double(Self.playfieldWidth), spriteWidth: Double(Self.petWidth))
+        for frame in frames {
+            guard let button = taskButtons.first(where: { $0.taskID == frame.id }),
+                  let state = statesByTask[frame.id] else { continue }
+            let rect = NSRect(x: frame.x, y: 0, width: Self.petWidth, height: max(22, bounds.height))
+            if button.frame != rect { button.frame = rect }
+            let animation: PetAnimationState
+            switch state {
+            case .running: animation = frame.facingRight ? .runningRight : .runningLeft
+            case .waiting: animation = .waiting
+            case .failed: animation = .failed
+            case .completed, .recent: animation = .idle
+            }
+            if let pet = petsByTask[frame.id] {
+                button.spriteFrames = cachedSheets[SheetKey(pet: pet)]?.frames(for: animation) ?? []
+            } else {
+                button.spriteFrames = []
+            }
+            // Idle means standing still, not a looping idle animation.
+            button.showFrame(state == .running ? Int(frame.animationTime * 8) : 0)
+        }
+    }
+
     private func configureOverview() {
         setAccessibilityElement(true)
         setAccessibilityRole(.group)
-        setAccessibilityLabel("Task companions")
-        setAccessibilityHelp("Choose a companion to open its task, or show all tasks and Pet Bar controls.")
+        setAccessibilityLabel("Shared pets")
+        setAccessibilityHelp("Pets share one space. Working pets move; idle pets stand. Choose a pet to open its task, or open the task list.")
         overviewButton.displayMode = .overview
         overviewButton.toolTip = "Show all tasks and Pet Bar controls"
-        overflowButton.isHidden = true
-        addSubview(overflowButton)
         addSubview(overviewButton)
         setAccessibilityChildren([overviewButton])
     }
 
     private func updateAnimation() {
-        let reduced = NSWorkspace.shared.accessibilityDisplayShouldReduceMotion
         let shouldAnimate = window != nil && window?.isVisible == true && !isHiddenOrHasHiddenAncestor
-            && !screenSleeping && !reduced && taskButtons.contains { $0.animates }
-        guard shouldAnimate else {
-            stopAnimation()
-            if reduced { taskButtons.forEach { $0.showFrame(0) } }
-            return
-        }
+            && !screenSleeping && !isPointerInside && !NSWorkspace.shared.accessibilityDisplayShouldReduceMotion
+            && statesByTask.values.contains(.running)
+        guard shouldAnimate else { stopAnimation(); return }
         guard animationTimer == nil else { return }
-        let timer = Timer(timeInterval: 0.125, repeats: true) { [weak self] timer in
+        lastTick = ProcessInfo.processInfo.systemUptime
+        let timer = Timer(timeInterval: 1.0 / 24, repeats: true) { [weak self] timer in
             let hasOwner = MainActor.assumeIsolated {
                 guard let self else { return false }
-                self.animationStep &+= 1
-                self.taskButtons.filter(\.animates).forEach { $0.showFrame(self.animationStep) }
+                let now = ProcessInfo.processInfo.systemUptime
+                let delta = now - (self.lastTick ?? now)
+                self.lastTick = now
+                // Keep moving targets still while someone navigates by keyboard.
+                if self.window?.isKeyWindow == true,
+                   let focused = self.window?.firstResponder as? NSView, focused.isDescendant(of: self) { return true }
+                self.applyMotion(deltaTime: delta)
                 return true
             }
             if !hasOwner { timer.invalidate() }
         }
-        timer.tolerance = 0.025
+        timer.tolerance = 0.008
         animationTimer = timer
         RunLoop.main.add(timer, forMode: .common)
     }
@@ -192,6 +227,7 @@ final class PetTaskStripView: NSView {
     private func stopAnimation() {
         animationTimer?.invalidate()
         animationTimer = nil
+        lastTick = nil
     }
 
     private func startObserving() {
@@ -241,13 +277,7 @@ final class PetTaskStripView: NSView {
             sheet = try? PetSpriteSheet(package: package)
         }
 
-        func frames(for state: PetTaskStatePresentation) -> [NSImage] {
-            let animation: PetAnimationState = switch state {
-            case .running: .running
-            case .waiting: .waiting
-            case .failed: .failed
-            case .completed, .recent: .idle
-            }
+        func frames(for animation: PetAnimationState) -> [NSImage] {
             if let prepared = preparedFrames[animation] { return prepared }
             let originals = sheet?.frames(for: animation) ?? []
             let images = originals.compactMap { $0.cgImage(forProposedRect: nil, context: nil, hints: nil) }
@@ -293,7 +323,7 @@ final class PetTaskStripView: NSView {
                 let factor = min(30 / envelope.width, 21 / envelope.height)
                 let artSize = NSSize(width: envelope.width * factor, height: envelope.height * factor)
                 context.draw(cropped, in: CGRect(x: (size.width - artSize.width) / 2,
-                                                y: (size.height - artSize.height) / 2,
+                                                y: 0.5,
                                                 width: artSize.width, height: artSize.height))
                 guard let bitmap = context.makeImage() else { continue }
                 let representation = NSBitmapImageRep(cgImage: bitmap)
@@ -314,7 +344,7 @@ private final class PetTaskStripButton: NSButton {
     }
 
     var taskID = ""
-    var spriteFrames: [NSImage] = []
+    var spriteFrames: [NSImage] = [] { didSet { needsDisplay = true } }
     var displayMode: DisplayMode = .overview { didSet { needsDisplay = true } }
     var onPress: (() -> Void)?
     var onSecondaryPress: (() -> Void)?
@@ -375,15 +405,10 @@ private final class PetTaskStripButton: NSButton {
             } else {
                 drawSymbol("pawprint.fill", size: 14, color: .secondaryLabelColor)
             }
-            let color: NSColor = switch state {
-            case .waiting: .systemOrange
-            case .failed: .systemRed
-            case .running: .systemBlue
-            case .completed, .recent: .tertiaryLabelColor
+            if state == .waiting || state == .failed {
+                (state == .failed ? NSColor.systemRed : .systemOrange).setFill()
+                NSBezierPath(ovalIn: NSRect(x: bounds.maxX - 5, y: 3, width: 3, height: 3)).fill()
             }
-            color.setFill()
-            let marker = NSRect(x: bounds.maxX - 7, y: 3, width: 4, height: 4)
-            NSBezierPath(ovalIn: marker).fill()
         case let .overflow(count, needsAttention):
             let label = "+\(count)" as NSString
             let attributes: [NSAttributedString.Key: Any] = [

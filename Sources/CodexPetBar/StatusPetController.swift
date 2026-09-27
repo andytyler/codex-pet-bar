@@ -6,6 +6,7 @@ import Darwin
 final class StatusPetController: NSObject {
     private let statusItem: NSStatusItem
     private let hoverPanelController = PetHoverPanelController()
+    private var sharedPetParticipants: [PetTaskSummary] = []
     private var taskStripView: PetTaskStripView?
     private var taskPetAssignments: [String: String] = [:]
     private var navigationError: String?
@@ -844,8 +845,7 @@ final class StatusPetController: NSObject {
             taskPetAssignments = assignments
             preferences.taskPetAssignments = assignments
         }
-        let strip = PetTaskCompanions.strip(tasks: threads)
-        guard preferences.displayMode == .taskPets, !strip.visibleTasks.isEmpty,
+        guard preferences.displayMode == .sharedPets, !pets.isEmpty,
               let button = statusItem.button else {
             if let taskStripView {
                 taskStripView.removeFromSuperview()
@@ -855,16 +855,33 @@ final class StatusPetController: NSObject {
             }
             return
         }
+        let strip = PetSharedCompanions.strip(tasks: threads, previousTasks: sharedPetParticipants)
+        sharedPetParticipants = strip.visibleTasks
         let view = taskStripView ?? PetTaskStripView(frame: button.bounds)
         let presentations = PetTaskPresentationAdapter.taskGroups(PetTaskSummaryGrouping.groups(tasks: strip.visibleTasks)).flatMap(\.tasks)
-        let ordered = strip.visibleTasks.compactMap { summary in presentations.first { $0.id == summary.id } }
+        var ordered = strip.visibleTasks.compactMap { summary in presentations.first { $0.id == summary.id } }
         var companions: [String: PetPackage] = [:]
         for task in ordered {
             companions[task.id] = pets.first { $0.id == assignments[task.id] } ?? selectedPet
         }
+        if ordered.isEmpty {
+            // The shared mode can still be company before there are any tasks.
+            // These pets open the list; they never pretend to be agent sessions.
+            let library = ([selectedPet].compactMap { $0 } + pets.filter { $0.id != selectedPet?.id }).prefix(3)
+            for pet in library {
+                let id = "pet-bar:idle:\(pet.id)"
+                ordered.append(PetTaskPresentation(id: id, sourceID: id, navigationSourceID: nil,
+                    title: pet.displayName, summary: "Idle companion", provider: .other,
+                    state: .recent, deepLinkURL: nil, projectURL: nil))
+                companions[id] = pet
+            }
+        }
         view.update(tasks: ordered, petsByTask: companions,
             overflowCount: strip.overflowCount, attentionOverflowCount: strip.attentionOverflowCount,
-            onOpenTask: { [weak self] task in self?.openPresentedTask(task) },
+            onOpenTask: { [weak self] task in
+                if task.id.hasPrefix("pet-bar:idle:") { self?.hoverPanelController.togglePinned() }
+                else { self?.openPresentedTask(task) }
+            },
             onOpenOverview: { [weak self] in self?.hoverPanelController.togglePinned() })
         applyStatusLength(Double(view.preferredWidth))
         view.frame = button.bounds
@@ -1410,7 +1427,7 @@ final class StatusPetController: NSObject {
     private func displayModeMenuItem() -> NSMenuItem {
         let item = NSMenuItem(title: "Menu bar", action: nil, keyEquivalent: "")
         let submenu = NSMenu(title: "Menu bar")
-        for (title, mode) in [("One companion", PetDisplayMode.companion), ("A pet for each task", .taskPets)] {
+        for (title, mode) in [("One companion", PetDisplayMode.companion), ("Shared pets", .sharedPets)] {
             let option = NSMenuItem(title: title, action: #selector(selectDisplayMode(_:)), keyEquivalent: "")
             option.target = self
             option.representedObject = mode.rawValue

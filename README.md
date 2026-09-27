@@ -14,7 +14,7 @@ CodexPetBar puts an animated pet in your macOS menu bar. It can follow the pet s
 
 [Website](https://pet.ajt.dev/) · [Download the latest release](https://github.com/andytyler/codex-pet-bar/releases/latest)
 
-**Release status:** this branch contains v0.3.1, pending Apple notarization. Public downloads and Homebrew currently provide v0.1.2. The features documented below describe v0.3.1; build from source to try them now.
+**Release status:** this branch contains v0.3.2, pending Apple notarization. Public downloads and Homebrew currently provide v0.1.2. The features documented below describe v0.3.2; build from source to try them now.
 
 ## Install
 
@@ -63,14 +63,14 @@ For a development-only run without copying the app into `~/Applications`:
 
 CodexPetBar lives in the menu bar. Click your pet to see a compact list of tasks, with anything needing your input first. Click anywhere on a row—including its pet—to return to that task or project. Recent work is collapsed until you ask for it. A task’s tooltip includes its latest available update; navigation failures stay visible with an explanation.
 
-Choose a mode in **Settings → Menu bar**:
+Choose a mode in **Settings → Menu bar**. One companion is the default:
 
 - **One companion** follows your selected Codex pet, with activity and provider signals. Hover for a quick look or click to keep the list open.
-- **A pet for each task** gives active tasks their own companions, with up to four visible pets. Codex child runs share their parent conversation’s pet and name. Click a pet to open that task, or the chevron to see the list; **+N** opens any overflow. When work finishes, your usual companion returns.
+- **Shared pets** puts up to four companions in one continuous area. Working pets run across the shared space; finished or idle pets stay standing. Movement pauses on hover, keyboard interaction, and with Reduce Motion enabled. Click a pet to return to its task, or the chevron / **+N** to open the task list. Codex child runs share their parent conversation’s pet. With no task history, a few pets from your existing library stand together.
 
 Right-click a task row and choose **Choose pet** to assign a companion. Choices persist on this Mac. Pets come from your existing local library; tasks may share a pet when there are fewer pets than tasks.
 
-Escape or an outside click closes the list. The ellipsis opens settings, including Menu bar, Pets, Appearance, agent integrations, Utilities, Open at Login, and Quit. Right-clicking a menu-bar pet opens settings in one-companion mode or the task list in per-task mode.
+Escape or an outside click closes the list. The ellipsis opens settings, including Menu bar, Pets, Appearance, agent integrations, Utilities, Open at Login, and Quit. Right-clicking a menu-bar pet opens settings in one-companion mode or the task list in shared-pets mode.
 
 Running indicators require current activity evidence. Codex running evidence expires after an hour without a fresh hook or rollout update; Claude Code and Cursor keep their existing 30-minute window. Expired activity becomes recent, not completed. Input requests and failures retain their separate attention window.
 

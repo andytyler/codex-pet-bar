@@ -34,7 +34,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             do {
                 try PetTaskStripPreviewRenderer.render(
                     to: URL(fileURLWithPath: String(argument.dropFirst("--render-task-pets=".count))),
-                    dark: ProcessInfo.processInfo.arguments.contains("--preview-dark")
+                    dark: ProcessInfo.processInfo.arguments.contains("--preview-dark"),
+                    animated: ProcessInfo.processInfo.arguments.contains("--preview-animated")
                 )
             } catch {
                 FileHandle.standardError.write(Data("Could not render task pets: \(error)\n".utf8))
