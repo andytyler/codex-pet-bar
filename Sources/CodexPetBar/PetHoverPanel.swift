@@ -3,7 +3,7 @@ import CodexPetBarCore
 import SwiftUI
 
 private enum PetHoverPanelMetrics {
-    static let width: CGFloat = 420
+    static let width: CGFloat = 360
     static let screenMargin: CGFloat = 8
     static let statusGap: CGFloat = 6
     static let showDelay: TimeInterval = 0.18
@@ -31,6 +31,7 @@ final class PetHoverPanelController: NSObject {
     private var isMenuOpen = false
     private var isPinned = false
     private var showsConnections = false
+    private var showsRecent = false
     private var settingsHandler: (@MainActor () -> Void)?
     private var connectionHandler: (@MainActor (PetProvider) -> Void)?
     private var modeHandler: (@MainActor (PetDisplayMode) -> Void)?
@@ -165,6 +166,11 @@ final class PetHoverPanelController: NSObject {
                     self.dismiss()
                     return nil
                 }
+            } else if event.window === self.panel,
+                      event.type == .rightMouseDown || event.modifierFlags.contains(.control) {
+                // A context submenu can extend outside the panel. Pin before
+                // it opens so pointer exit cannot dismiss its owning window.
+                self.pinForInteraction()
             } else if event.window == nil || event.window === self.panel {
                 self.dismissIfOutside()
             }
@@ -236,7 +242,8 @@ final class PetHoverPanelController: NSObject {
     }
 
     private func scheduleShow() {
-        guard !isMenuOpen, !panel.isVisible, showWorkItem == nil else {
+        guard !isMenuOpen, !panel.isVisible, showWorkItem == nil,
+              contentProvider?().displayMode != .taskPets else {
             return
         }
 
@@ -288,7 +295,8 @@ final class PetHoverPanelController: NSObject {
     }
 
     private func showIfEligible() {
-        guard !isMenuOpen, isPointerOverStatusItem else {
+        guard !isMenuOpen, isPointerOverStatusItem,
+              contentProvider?().displayMode != .taskPets else {
             return
         }
 
@@ -296,6 +304,7 @@ final class PetHoverPanelController: NSObject {
         let reduceMotion = NSWorkspace.shared.accessibilityDisplayShouldReduceMotion
         panel.alphaValue = reduceMotion ? 1 : 0
         panel.orderFrontRegardless()
+        startDismissMonitors()
 
         guard !reduceMotion else {
             return
@@ -323,7 +332,8 @@ final class PetHoverPanelController: NSObject {
         let availableHeight = max(132, screen.visibleFrame.height - (2 * PetHoverPanelMetrics.screenMargin))
         let connectionHeight: CGFloat = showsConnections
             ? ProviderConnectionsView.estimatedHeight(resultMessage: content.connectionMessage) + 38 : 0
-        let panelHeight = min(content.preferredHeight + connectionHeight, availableHeight)
+        let recentHeight = showsRecent ? CGFloat(min(content.recentTaskCount, 5)) * 56 + 8 : 0
+        let panelHeight = min(content.preferredHeight + recentHeight + connectionHeight, availableHeight)
         let rootView = PetHoverPanelView(
             content: content,
             height: panelHeight,
@@ -332,6 +342,12 @@ final class PetHoverPanelController: NSObject {
                 self?.taskHandler?(task)
             },
             showsConnections: showsConnections,
+            showsRecent: showsRecent,
+            onToggleRecent: { [weak self] in
+                guard let self else { return }
+                self.showsRecent.toggle()
+                self.presentPinned()
+            },
             onToggleConnections: { [weak self] in
                 guard let self else { return }
                 self.showsConnections.toggle()
@@ -437,6 +453,7 @@ final class PetHoverPanelController: NSObject {
                     return
                 }
                 self.panel.orderOut(nil)
+                self.stopDismissMonitors()
                 self.panel.alphaValue = 1
             }
         }
@@ -557,15 +574,14 @@ struct PetHoverPanelView: View {
     let height: CGFloat
     let onOpenTask: (PetTaskPresentation) -> Void
     var showsConnections = false
+    var showsRecent = false
+    var onToggleRecent: () -> Void = {}
     var onToggleConnections: () -> Void = {}
     var onOpenSettings: () -> Void = {}
     var onConnect: (PetProvider) -> Void = { _ in }
     var onChangeMode: (PetDisplayMode) -> Void = { _ in }
     var onAssignPet: (String, String) -> Void = { _, _ in }
     var onBeginInteraction: () -> Void = {}
-    @State private var search = ""
-    @State private var showsRecent = false
-    @FocusState private var searchIsFocused: Bool
 
     private var tasks: [PetTaskPresentation] {
         content.projects.flatMap { project in
@@ -576,79 +592,75 @@ struct PetHoverPanelView: View {
             }
         }
     }
-    private var filtered: [PetTaskPresentation] {
-        let query = search.trimmingCharacters(in: .whitespacesAndNewlines)
-        return query.isEmpty ? tasks : tasks.filter {
-            "\($0.title) \($0.summary) \($0.projectName) \($0.provider.displayName)".localizedCaseInsensitiveContains(query)
+    private var active: [PetTaskPresentation] {
+        tasks.filter { $0.state.isActive }.sorted {
+            let left = $0.state == .running ? 1 : 0
+            let right = $1.state == .running ? 1 : 0
+            if left != right { return left < right }
+            return $0.id < $1.id
         }
     }
-    private var attention: [PetTaskPresentation] { filtered.filter { $0.state == .waiting || $0.state == .failed } }
-    private var working: [PetTaskPresentation] { filtered.filter { $0.state == .running } }
-    private var recent: [PetTaskPresentation] { filtered.filter { !$0.state.isActive } }
+    private var recent: [PetTaskPresentation] {
+        tasks.filter { !$0.state.isActive }.sorted {
+            if $0.updatedAt != $1.updatedAt { return ($0.updatedAt ?? .distantPast) > ($1.updatedAt ?? .distantPast) }
+            return $0.id < $1.id
+        }
+    }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            header
-            Picker("Menu bar mode", selection: Binding(get: { content.displayMode }, set: { onChangeMode($0) })) {
-                Text("One companion").tag(PetDisplayMode.companion)
-                Text("Pets per task").tag(PetDisplayMode.taskPets)
+        VStack(alignment: .leading, spacing: 0) {
+            HStack {
+                Text("Pet Bar").font(.system(size: 12, weight: .semibold))
+                Spacer()
+                Button(action: onOpenSettings) {
+                    Image(systemName: "ellipsis")
+                        .font(.system(size: 14, weight: .medium))
+                        .frame(width: 24, height: 24).contentShape(Rectangle())
+                }
+                .buttonStyle(.plain).foregroundStyle(.secondary)
+                .help("Pet Bar settings").accessibilityLabel("Pet Bar settings")
             }
-            .pickerStyle(.segmented).labelsHidden()
-            .help("Show one companion, or up to four active task pets in your menu bar")
+            .padding(.leading, 10).padding(.trailing, 4).padding(.bottom, 6)
+
             if let error = content.navigationError {
                 Label(error, systemImage: "exclamationmark.circle")
                     .font(.system(size: 11)).foregroundStyle(.red)
                     .fixedSize(horizontal: false, vertical: true)
+                    .padding(8)
             }
-            if tasks.isEmpty {
-                emptyState
-            } else {
-                HStack(spacing: 7) {
-                    Image(systemName: "magnifyingglass").foregroundStyle(.tertiary)
-                    TextField("Find a task…", text: $search).textFieldStyle(.plain)
-                        .accessibilityLabel("Find a task")
-                        .focused($searchIsFocused)
-                        .onChange(of: searchIsFocused) { _, focused in
-                            if focused { onBeginInteraction() }
-                        }
-                    if !search.isEmpty {
-                        Button { search = "" } label: { Image(systemName: "xmark.circle.fill") }
-                            .buttonStyle(.plain).foregroundStyle(.secondary).accessibilityLabel("Clear search")
+            ScrollView {
+                VStack(alignment: .leading, spacing: 0) {
+                    if active.isEmpty { quietState }
+                    ForEach(active) { task in row(task) }
+                    if showsRecent {
+                        if !active.isEmpty { Divider().padding(.horizontal, 8).padding(.vertical, 4) }
+                        ForEach(recent) { task in row(task) }
                     }
                 }
-                .font(.system(size: 12)).padding(.horizontal, 10).padding(.vertical, 8)
-                .background(.primary.opacity(0.035), in: RoundedRectangle(cornerRadius: 8))
-                ScrollView {
-                    VStack(alignment: .leading, spacing: 16) {
-                        if !attention.isEmpty { section("Needs you", tasks: attention, tint: .orange) }
-                        if !working.isEmpty { section("Working", tasks: working, tint: .teal) }
-                        if attention.isEmpty && working.isEmpty && search.isEmpty {
-                            HStack(spacing: 12) {
-                                PetPortraitView(pet: content.selectedPet, size: 44)
-                                VStack(alignment: .leading, spacing: 4) {
-                                    Text("All quiet for now").font(.system(size: 13, weight: .semibold))
-                                    Text("Your next task will show up here.").font(.system(size: 11)).foregroundStyle(.secondary)
-                                }
-                            }.padding(.vertical, 12)
-                        }
-                        if !recent.isEmpty {
-                            DisclosureGroup(isExpanded: $showsRecent) {
-                                VStack(spacing: 8) { ForEach(recent) { task in row(task) } }
-                                    .padding(.top, 8)
-                            } label: {
-                                Text("Recent · \(recent.count)").font(.system(size: 11, weight: .semibold)).foregroundStyle(.secondary)
-                            }
-                            .onChange(of: search) { _, value in if !value.isEmpty { showsRecent = true } }
-                        }
-                        if filtered.isEmpty {
-                            Text("No tasks match “\(search)”.")
-                                .font(.system(size: 12)).foregroundStyle(.secondary).padding(.vertical, 24)
-                        }
-                    }.padding(.bottom, 2)
-                }.scrollIndicators(.automatic)
             }
-            Divider()
-            connectionsButton
+            .scrollIndicators(.automatic)
+            if !recent.isEmpty || content.hasConnectionIssue || !content.hasReadyConnection || showsConnections {
+                Divider().padding(.horizontal, 8).padding(.top, 6)
+                HStack(spacing: 12) {
+                    if !recent.isEmpty {
+                        Button(action: onToggleRecent) {
+                            HStack(spacing: 5) {
+                                Text(showsRecent ? "Hide recent" : "Recent tasks")
+                                Image(systemName: showsRecent ? "chevron.up" : "chevron.down")
+                                    .font(.system(size: 8, weight: .semibold))
+                            }
+                        }.buttonStyle(.plain)
+                    }
+                    Spacer(minLength: 0)
+                    if content.hasConnectionIssue || !content.hasReadyConnection || showsConnections {
+                        Button(action: onToggleConnections) {
+                            Text(showsConnections ? "Hide connections" : content.hasConnectionIssue ? "Check connection" : "Connect an agent")
+                        }.buttonStyle(.plain)
+                    }
+                }
+                .font(.system(size: 11)).foregroundStyle(.secondary)
+                .padding(.horizontal, 10).padding(.top, 10).padding(.bottom, 2)
+            }
             if showsConnections {
                 ProviderConnectionsView(
                     health: content.connections,
@@ -656,14 +668,14 @@ struct PetHoverPanelView: View {
                     resultMessage: content.connectionMessage,
                     resultIsError: content.connectionFailed,
                     onConnect: onConnect
-                )
+                ).padding(.top, 12)
             }
         }
-        .padding(16)
+        .padding(8)
         .frame(width: PetHoverPanelMetrics.width, height: height, alignment: .topLeading)
-        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
-        .overlay { RoundedRectangle(cornerRadius: 18).strokeBorder(.primary.opacity(0.1), lineWidth: 1) }
-        .clipShape(RoundedRectangle(cornerRadius: 18))
+        .background(Color(nsColor: .windowBackgroundColor), in: RoundedRectangle(cornerRadius: 12))
+        .overlay { RoundedRectangle(cornerRadius: 12).strokeBorder(.primary.opacity(0.10), lineWidth: 0.5) }
+        .clipShape(RoundedRectangle(cornerRadius: 12))
         .accessibilityElement(children: .contain)
         .accessibilityLabel("Pet Bar tasks")
     }
@@ -674,62 +686,18 @@ struct PetHoverPanelView: View {
             onOpen: { onOpenTask(task) }, onAssign: { onAssignPet(task.id, $0) }, onBeginInteraction: onBeginInteraction)
     }
 
-    private func section(_ title: String, tasks: [PetTaskPresentation], tint: Color) -> some View {
-        VStack(alignment: .leading, spacing: 8) {
-            HStack(spacing: 6) {
-                Circle().fill(tint).frame(width: 5, height: 5)
-                Text(title).foregroundStyle(.secondary)
-                Text("\(tasks.count)").foregroundStyle(.tertiary)
-            }.font(.system(size: 11, weight: .semibold))
-            ForEach(tasks) { task in row(task) }
-        }
-    }
-
-    private var header: some View {
+    private var quietState: some View {
         HStack(spacing: 10) {
-            PetPortraitView(pet: content.selectedPet, size: 36)
-            VStack(alignment: .leading, spacing: 3) {
-                Text("Pet Bar").font(.system(size: 17, weight: .semibold))
-                Text(content.statusText).font(.system(size: 11))
-                    .foregroundStyle(content.needsAttention ? Color.orange : Color.secondary).lineLimit(1)
+            PetPortraitView(pet: content.selectedPet, size: 32).frame(width: 36)
+            VStack(alignment: .leading, spacing: 4) {
+                Text(content.hasPet ? "All quiet" : "Choose a pet in Codex")
+                    .font(.system(size: 13, weight: .medium))
+                Text(content.hasReadyConnection ? "Your pet will let you know when you’re needed." : "Connect your agent to follow its tasks.")
+                    .font(.system(size: 11)).foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
             }
-            Spacer()
-            Button(action: onOpenSettings) {
-                Image(systemName: "gearshape").font(.system(size: 14)).frame(width: 28, height: 28).contentShape(Rectangle())
-            }.buttonStyle(.plain).foregroundStyle(.secondary)
-                .help("Pet Bar settings").accessibilityLabel("Pet Bar settings")
         }
-    }
-
-    private var connectionsButton: some View {
-        Button(action: onToggleConnections) {
-            HStack(spacing: 6) {
-                Circle().fill(content.hasConnectionIssue ? Color.orange : content.hasReadyConnection ? .green : .secondary)
-                    .frame(width: 5, height: 5)
-                Text("Agents")
-                Spacer()
-                Text(ProviderConnectionPresentation.summary(for: content.connections))
-                    .foregroundStyle(content.hasConnectionIssue ? Color.orange : Color.secondary)
-                Image(systemName: showsConnections ? "chevron.up" : "chevron.down").font(.system(size: 9, weight: .semibold))
-            }.font(.system(size: 11)).frame(minHeight: 20).contentShape(Rectangle())
-        }.buttonStyle(.plain).help(content.petSourceText)
-            .accessibilityLabel(showsConnections ? "Hide agent connections" : "Show agent connections")
-            .accessibilityValue(ProviderConnectionPresentation.summary(for: content.connections))
-    }
-
-    private var emptyState: some View {
-        VStack(spacing: 8) {
-            PetPortraitView(pet: content.selectedPet, size: 64)
-            Text(!content.hasPet ? "Bring your Codex pet" : content.hasConnectionIssue ? "Let’s reconnect" : "Ready for a little company?")
-                .font(.system(size: 14, weight: .semibold))
-            Text(!content.hasPet
-                 ? "Choose a pet in Codex, then start a task. It will appear here automatically."
-                 : content.hasConnectionIssue
-                 ? "Open Agents below to restore activity from your tools."
-                 : "Start a task. Your pet will work alongside it and let you know when you’re needed.")
-                .font(.system(size: 12)).foregroundStyle(.secondary)
-                .multilineTextAlignment(.center).fixedSize(horizontal: false, vertical: true)
-        }.frame(maxWidth: .infinity, maxHeight: .infinity).padding(.horizontal, 12)
+        .padding(.horizontal, 8).frame(minHeight: 72)
     }
 }
 

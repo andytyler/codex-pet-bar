@@ -14,7 +14,7 @@ CodexPetBar puts an animated pet in your macOS menu bar. It can follow the pet s
 
 [Website](https://pet.ajt.dev/) · [Download the latest release](https://github.com/andytyler/codex-pet-bar/releases/latest)
 
-**Release status:** this branch contains v0.3.0, pending Apple notarization. Public downloads and Homebrew currently provide v0.1.2. The features documented below describe v0.3.0; build from source to try them now.
+**Release status:** this branch contains v0.3.1, pending Apple notarization. Public downloads and Homebrew currently provide v0.1.2. The features documented below describe v0.3.1; build from source to try them now.
 
 ## Install
 
@@ -51,7 +51,7 @@ To connect Codex, Claude Code, and Cursor in one step:
 ./script/install.sh --with-all-hooks --open
 ```
 
-Click the pet, expand **Agents**, and connect the agents you use. Each connection shows whether it is ready, verified, or needs repair. Other agents stay optional. The right-click menu also offers **Agents → Install / Repair All**. Hooks are optional, but they enable richer reactions for prompts, tool runs, permission requests where supported, failures, and stops. Codex may ask you to approve newly installed hooks before reactions begin.
+Open **Settings → Agents** and connect the agents you use. If nothing is connected, the task panel also offers **Connect an agent**. Each connection shows whether it is ready, verified, or needs repair. Other agents stay optional. The right-click menu also offers **Agents → Install / Repair All**. Hooks are optional, but they enable richer reactions for prompts, tool runs, permission requests where supported, failures, and stops. Codex may ask you to approve newly installed hooks before reactions begin.
 
 For a development-only run without copying the app into `~/Applications`:
 
@@ -61,16 +61,18 @@ For a development-only run without copying the app into `~/Applications`:
 
 ## Use
 
-CodexPetBar lives in the menu bar. Click your pet to open the task board. **Needs you** comes first, then **Working**, with **Recent** tucked away below. Search by task, project, or agent. Each row shows its pet, title, latest update, status, and a clear action to open the task or project. Navigation failures stay visible with an explanation.
+CodexPetBar lives in the menu bar. Click your pet to see a compact list of tasks, with anything needing your input first. Click anywhere on a row—including its pet—to return to that task or project. Recent work is collapsed until you ask for it. A task’s tooltip includes its latest available update; navigation failures stay visible with an explanation.
 
-Choose a menu-bar mode at the top of the board:
+Choose a mode in **Settings → Menu bar**:
 
-- **One companion** follows your selected Codex pet, with activity and provider signals.
-- **Pets per task** gives active tasks their own companions, with up to four visible pets. Tasks needing attention come first; **+N** opens the rest. Click a pet to open its task, or the chevron to see the board. When work finishes, your usual companion returns.
+- **One companion** follows your selected Codex pet, with activity and provider signals. Hover for a quick look or click to keep the list open.
+- **A pet for each task** gives active tasks their own companions, with up to four visible pets. Codex child runs share their parent conversation’s pet and name. Click a pet to open that task, or the chevron to see the list; **+N** opens any overflow. When work finishes, your usual companion returns.
 
-Click a task’s portrait to choose its pet. Assignments stay on this Mac across restarts. Pets come from your existing local library; tasks may share a pet when the library is smaller than your active task list.
+Right-click a task row and choose **Choose pet** to assign a companion. Choices persist on this Mac. Pets come from your existing local library; tasks may share a pet when there are fewer pets than tasks.
 
-Hover for a quick look, or click to keep the board open. Escape, an outside click, or another click on the overview closes it. The settings button opens Pets, Appearance, agent integrations, Utilities, Open at Login, and Quit. In one-companion mode, right-click also opens settings; in task-pet mode, right-click opens the board.
+Escape or an outside click closes the list. The ellipsis opens settings, including Menu bar, Pets, Appearance, agent integrations, Utilities, Open at Login, and Quit. Right-clicking a menu-bar pet opens settings in one-companion mode or the task list in per-task mode.
+
+Running indicators require current activity evidence. Codex running evidence expires after an hour without a fresh hook or rollout update; Claude Code and Cursor keep their existing 30-minute window. Expired activity becomes recent, not completed. Input requests and failures retain their separate attention window.
 
 On first launch from Applications, Pet Bar asks whether to **Open at Login**. Choose **Not Now** to leave it off. You can change the setting later from the pet menu. macOS may require approval in System Settings → General → Login Items.
 

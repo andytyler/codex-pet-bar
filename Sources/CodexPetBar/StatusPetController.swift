@@ -743,11 +743,15 @@ final class StatusPetController: NSObject {
             let sessionIndexURL = self.sessionIndexURL
             let sessionsRootURL = self.sessionsRootURL
             let providerEvents = self.cachedPetEvents ?? []
+            let activeCodexThreadIDs = Set(self.verifiedRunningCodexScopes.flatMap { scope in
+                [scope.sessionID, scope.parentSessionID].compactMap { $0 }
+            })
             let summaries = await Task.detached(priority: .utility) {
                 CodexTaskSummaryReader.read(
                     sessionIndexURL: sessionIndexURL,
                     sessionsRootURL: sessionsRootURL,
-                    providerEvents: providerEvents
+                    providerEvents: providerEvents,
+                    activeCodexThreadIDs: activeCodexThreadIDs
                 )
             }.value
 
@@ -770,7 +774,7 @@ final class StatusPetController: NSObject {
         if taskSummariesDirty {
             refreshTaskSummariesInBackground()
         }
-        let groups = PetTaskSummaryGrouping.groups(tasks: cachedTaskSummaries)
+        let groups = PetTaskSummaryGrouping.groups(tasks: presentedThreads)
         return PetHoverPanelContent(
             petName: selectedPet?.displayName ?? "Codex Pet",
             statusText: taskStatusText,
@@ -789,12 +793,16 @@ final class StatusPetController: NSObject {
         )
     }
 
+    private var presentedThreads: [PetTaskSummary] {
+        PetThreadSummaries.consolidated(cachedTaskSummaries)
+    }
+
     private var taskStatusText: String {
-        PetTaskOverview.title(
-            scopes: activeScopes,
-            showsCompletion: isShowingCompletion,
-            currentActivity: currentActivity
-        )
+        let threads = presentedThreads
+        let waiting = threads.filter { $0.status == .waiting || $0.status == .failed }.count
+        if waiting > 0 { return waiting == 1 ? "1 task needs you" : "\(waiting) tasks need you" }
+        let working = threads.filter { $0.status == .running }.count
+        return working == 0 ? "All quiet" : working == 1 ? "1 task working" : "\(working) tasks working"
     }
 
     private func openPresentedTask(_ task: PetTaskPresentation) {
@@ -820,12 +828,13 @@ final class StatusPetController: NSObject {
     }
 
     private func refreshTaskCompanions() {
-        let active = cachedTaskSummaries.filter { $0.status == .waiting || $0.status == .failed || $0.status == .running }
+        let threads = presentedThreads
+        let active = threads.filter { $0.status == .waiting || $0.status == .failed || $0.status == .running }
         // Assign active work first so archived tasks do not consume distinct pets.
         var assignments = PetTaskCompanions.assignments(tasks: active, pets: pets, previous: taskPetAssignments)
-        assignments = PetTaskCompanions.assignments(tasks: cachedTaskSummaries, pets: pets, previous: assignments)
+        assignments = PetTaskCompanions.assignments(tasks: threads, pets: pets, previous: assignments)
         if assignments.count > 500 {
-            let recentIDs = cachedTaskSummaries.sorted { $0.updatedAt > $1.updatedAt }.prefix(500).map(\.id)
+            let recentIDs = threads.sorted { $0.updatedAt > $1.updatedAt }.prefix(500).map(\.id)
             let retained = Set(recentIDs)
             let remaining = assignments.keys.filter { !retained.contains($0) }.sorted().prefix(max(0, 500 - retained.count))
             let keep = retained.union(remaining)
@@ -835,7 +844,7 @@ final class StatusPetController: NSObject {
             taskPetAssignments = assignments
             preferences.taskPetAssignments = assignments
         }
-        let strip = PetTaskCompanions.strip(tasks: cachedTaskSummaries)
+        let strip = PetTaskCompanions.strip(tasks: threads)
         guard preferences.displayMode == .taskPets, !strip.visibleTasks.isEmpty,
               let button = statusItem.button else {
             if let taskStripView {
@@ -1381,6 +1390,7 @@ final class StatusPetController: NSObject {
         menu.addItem(.separator())
 
         menu.addItem(taskHierarchyMenuItem())
+        menu.addItem(displayModeMenuItem())
         menu.addItem(petsMenuItem())
         menu.addItem(appearanceMenuItem())
         menu.addItem(integrationsMenuItem())
@@ -1397,12 +1407,32 @@ final class StatusPetController: NSObject {
         return menu
     }
 
+    private func displayModeMenuItem() -> NSMenuItem {
+        let item = NSMenuItem(title: "Menu bar", action: nil, keyEquivalent: "")
+        let submenu = NSMenu(title: "Menu bar")
+        for (title, mode) in [("One companion", PetDisplayMode.companion), ("A pet for each task", .taskPets)] {
+            let option = NSMenuItem(title: title, action: #selector(selectDisplayMode(_:)), keyEquivalent: "")
+            option.target = self
+            option.representedObject = mode.rawValue
+            option.state = preferences.displayMode == mode ? .on : .off
+            submenu.addItem(option)
+        }
+        item.submenu = submenu
+        return item
+    }
+
+    @objc private func selectDisplayMode(_ sender: NSMenuItem) {
+        guard let rawValue = sender.representedObject as? String,
+              let mode = PetDisplayMode(rawValue: rawValue) else { return }
+        setDisplayMode(mode)
+    }
+
     private func taskHierarchyMenuItem() -> NSMenuItem {
         let item = NSMenuItem(title: "Tasks", action: nil, keyEquivalent: "")
         item.image = menuSymbol("list.bullet.rectangle", description: "Tasks")
         let submenu = NSMenu(title: "Tasks")
         let groups = PetTaskPresentationAdapter.taskGroups(
-            PetTaskSummaryGrouping.groups(tasks: cachedTaskSummaries)
+            PetTaskSummaryGrouping.groups(tasks: presentedThreads)
         )
 
         if groups.isEmpty {
@@ -2166,13 +2196,14 @@ final class StatusPetController: NSObject {
             ?? currentActivity.animationState
         let stateDescription = isShowingCompletion ? "task finished" : isSleeping ? "sleeping" : state.rawValue.replacingOccurrences(of: "-", with: " ")
         let taskDescription: String
-        switch runningThreadCount {
+        let activeTaskCount = presentedThreads.filter { $0.status == .running || $0.status == .waiting || $0.status == .failed }.count
+        switch activeTaskCount {
         case 0:
             taskDescription = "no active tasks"
         case 1:
             taskDescription = "1 active task"
         default:
-            taskDescription = "\(runningThreadCount) active tasks"
+            taskDescription = "\(activeTaskCount) active tasks"
         }
         let providerDescription = activeProviderDescription.map { ", \($0)" } ?? ""
         let attentionDescription = attentionScope.map {
@@ -2180,48 +2211,21 @@ final class StatusPetController: NSObject {
         } ?? ""
         let description = "\(petName), \(stateDescription)\(attentionDescription), \(taskDescription)\(providerDescription)"
 
-        button.toolTip = "\(description)\nClick for tasks · Right-click for settings"
-        button.setAccessibilityHelp("Click to keep task summaries open. Right-click for settings.")
-        button.setAccessibilityLabel(petName)
+        let help = taskStripView == nil
+            ? "Click for tasks · Right-click for settings"
+            : "Click a pet to open its task. Use the chevron for all tasks."
+        button.toolTip = "\(description)\n\(help)"
+        button.setAccessibilityHelp(help)
+        button.setAccessibilityLabel(taskStripView == nil ? petName : "Task companions")
         button.setAccessibilityValue("\(stateDescription), \(taskDescription)\(providerDescription)")
     }
 
     private var activeProviderDescription: String? {
-        guard !activeScopes.isEmpty else {
-            return nil
-        }
-
-        let scopesByProvider = Dictionary(grouping: activeScopes, by: \.provider)
-        return PetProvider.allCases.compactMap { provider in
-            guard let scopes = scopesByProvider[provider], !scopes.isEmpty else {
-                return nil
-            }
-            let name = providerDisplayName(provider)
-            let activities = Dictionary(grouping: scopes, by: \.activity)
-            let details = [CodexActivity.reviewing, .failed, .running, .listening]
-                .compactMap { activity -> String? in
-                    guard let count = activities[activity]?.count, count > 0 else {
-                        return nil
-                    }
-                    let label: String
-                    switch activity {
-                    case .reviewing:
-                        label = "waiting"
-                    case .failed:
-                        label = "failed"
-                    case .running:
-                        label = "running"
-                    case .listening:
-                        label = "listening"
-                    case .idle:
-                        return nil
-                    }
-                    return count == 1 ? label : "\(count) \(label)"
-                }
-                .joined(separator: ", ")
-            return details.isEmpty ? name : "\(name): \(details)"
-        }
-        .joined(separator: "; ")
+        let providers = Set(presentedThreads.filter {
+            $0.status == .running || $0.status == .waiting || $0.status == .failed
+        }.map(\.provider))
+        let names = PetProvider.allCases.filter { providers.contains($0) }.map { providerDisplayName($0) }
+        return names.isEmpty ? nil : names.joined(separator: ", ")
     }
 
     private func providerDisplayName(_ provider: PetProvider) -> String {
@@ -3041,7 +3045,7 @@ private enum RuntimeCadence {
     static let maintenanceInterval: TimeInterval = 5
     static let activeRolloutScanInterval: TimeInterval = 4
     static let idleRolloutScanInterval: TimeInterval = 4
-    static let rolloutActivityStaleWindow: TimeInterval = 60 * 60
+    static let rolloutActivityStaleWindow = CodexPetActivityFreshness.codexRunningWindow
     static let maximumRolloutScanThreadCount = 80
     static let hookReviewWindow: TimeInterval = 7 * 24 * 60 * 60
     static let maximumCachedPetEvents = 4_096

@@ -1,5 +1,10 @@
 import Foundation
 
+/// The maximum age of running evidence shared by Codex hooks and rollout scans.
+public enum CodexPetActivityFreshness {
+    public static let codexRunningWindow: TimeInterval = 60 * 60
+}
+
 /// Shared lifecycle semantics for menu-bar activity and hover task summaries.
 ///
 /// Hook payloads are retained as an append-only history. This reducer interprets
@@ -66,9 +71,10 @@ enum CodexPetLifecycle {
                 let requestedWindow = max(0, activeWindow)
                 switch event.provider {
                 case .codex:
-                    // Codex has rollout reconciliation as an additional
-                    // liveness signal, so preserve its configured window.
-                    window = requestedWindow
+                    // Expired hooks cannot keep anonymous tasks running after
+                    // the matching rollout evidence would have gone stale.
+                    // Fresh rollout scans can independently restore activity.
+                    window = min(requestedWindow, CodexPetActivityFreshness.codexRunningWindow)
                 case .claude, .cursor:
                     // Hook-only providers can miss a terminal callback when
                     // their host exits. Bound stale running flags without

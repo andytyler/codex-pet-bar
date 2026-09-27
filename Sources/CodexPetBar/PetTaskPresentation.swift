@@ -198,11 +198,18 @@ struct PetHoverPanelContent: Equatable, Sendable {
             }
     }
 
-    var preferredHeight: CGFloat {
-        let activeCount = projects.flatMap(\.tasks).filter { $0.state.isActive }.count
-        guard activeCount > 0 else { return taskCount > 0 ? 440 : 340 }
-        return min(640, 242 + CGFloat(min(activeCount, 4)) * 116)
+    var recentTaskCount: Int {
+        projects.flatMap(\.tasks).filter { !$0.state.isActive }.count
     }
+
+    var preferredHeight: CGFloat {
+        let activeCount = taskCount - recentTaskCount
+        let rowsHeight = activeCount == 0 ? 72 : CGFloat(min(activeCount, 6)) * 56
+        let hasFooter = recentTaskCount > 0 || hasConnectionIssue || !hasReadyConnection
+        let errorHeight: CGFloat = navigationError == nil ? 0 : 52
+        return 46 + rowsHeight + (hasFooter ? 38 : 0) + errorHeight
+    }
+
 }
 
 enum PetTaskPresentationAdapter {

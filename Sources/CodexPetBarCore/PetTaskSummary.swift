@@ -242,14 +242,32 @@ public enum CodexTaskSummaryReader {
         sessionIndexURL: URL,
         sessionsRootURL: URL,
         providerEvents: [CodexPetEvent] = [],
+        activeCodexThreadIDs: Set<String> = [],
         now: Date = Date(),
         configuration: PetTaskSummaryConfiguration = .init()
     ) -> [PetTaskSummary] {
-        let threads = CodexSessionIndexLog.readRecentThreads(
+        let activeCodexTasks = PetTaskSummaryBuilder.providerTasks(
+            events: providerEvents,
+            excluding: [.claude, .cursor],
+            now: now,
+            configuration: configuration
+        ).filter { PetTaskSummaryBuilder.isAttentionStatus($0.status) }
+        let activeThreadIDs = Set(activeCodexTasks.flatMap { task in
+            [task.sourceID, task.navigationSourceID].compactMap { $0 }
+        }).union(activeCodexThreadIDs)
+        // The index timestamp can lag resumed work.
+        // Resolve active identities from the same bounded tail before applying
+        // the history limit, including rollout-only sessions without hooks.
+        let indexedThreads = CodexSessionIndexLog.readRecentThreads(
             from: sessionIndexURL,
-            limit: configuration.recentThreadLimit,
+            limit: .max,
             tailByteLimit: configuration.sessionIndexTailByteLimit
         )
+        let recentThreads = Array(indexedThreads.prefix(max(0, configuration.recentThreadLimit)))
+        let recentThreadIDs = Set(recentThreads.map(\.id))
+        let threads = recentThreads + indexedThreads.filter {
+            activeThreadIDs.contains($0.id) && !recentThreadIDs.contains($0.id)
+        }
 
         let rolloutURLs = rolloutURLs(
             for: threads,
@@ -280,14 +298,8 @@ public enum CodexTaskSummaryReader {
             configuration: configuration
         )
         let indexedCodexThreadIDs = Set(threads.map(\.id))
-        let unindexedActiveCodexTasks = PetTaskSummaryBuilder.providerTasks(
-            events: providerEvents,
-            excluding: [.claude, .cursor],
-            now: now,
-            configuration: configuration
-        ).filter { task in
+        let unindexedActiveCodexTasks = activeCodexTasks.filter { task in
             !indexedCodexThreadIDs.contains(task.sourceID)
-                && PetTaskSummaryBuilder.isAttentionStatus(task.status)
         }
         let otherProviderTasks = PetTaskSummaryBuilder.providerTasks(
             events: providerEvents,
@@ -533,7 +545,13 @@ public enum PetTaskSummaryBuilder {
                 completed.contains(task.sourceID) || task.navigationSourceID.map(completed.contains) == true {
                 status = .completed
             } else {
-                status = isAttentionStatus(task.status) ? .recent : task.status
+                // Cached prose is not evidence that work is still active after
+                // its hook or rollout scope has expired. Absence says recent,
+                // not completed; completion still requires explicit evidence.
+                switch task.status {
+                case .running, .waiting, .failed: status = .recent
+                case .completed, .recent: status = task.status
+                }
             }
             let navigationID = active?.parentSessionID ?? task.navigationSourceID
             return PetTaskSummary(sourceID: task.sourceID, navigationSourceID: navigationID,

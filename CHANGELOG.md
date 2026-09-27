@@ -1,5 +1,18 @@
 # Changelog
 
+## 0.3.1 (pending notarization)
+
+- Replace the task board with a compact native list: click any row to return to work, with recent tasks hidden until requested.
+- Put display modes in settings and individual pet choices in a task’s context menu.
+- Give each Codex conversation one stable pet, combining child-run activity under the real parent name.
+- Resolve names for active conversations even when they fall outside the recent-history limit.
+- Expire unrefreshed Codex running evidence after one hour, and retire cached active rows when their activity evidence expires.
+
+## 0.3.0 (pending notarization)
+
+- Add persistent task pet assignments and an optional menu bar with up to four task companions.
+- Open task destinations directly and show navigation failures inline.
+
 ## 0.2.0 (pending notarization)
 
 - Click the pet to keep tasks open; right-click for settings. Escape and outside clicks dismiss the panel.
